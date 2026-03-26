@@ -42,6 +42,16 @@ def run_trading_cycle():
     holdings = get_holdings(client)
     logger.info(f"Tracking {len(available_coins)} coins | Holding: {list(holdings.keys()) or 'nothing'}")
 
+    # Sell DOGE if held — redeploy into better opportunities
+    if "DOGE" in holdings:
+        logger.info("Selling DOGE — redeploying into better opportunities")
+        doge_price = get_price(client, "DOGE")
+        if doge_price and not DRY_RUN:
+            doge_value = holdings["DOGE"] * doge_price
+            result = place_order(client, "DOGE", "sell", doge_value, doge_price)
+            if result:
+                logger.info(f"DOGE sold for ~${doge_value:.2f} CAD")
+
     # Check for new Kraken listings — buy immediately on listing day
     new_listings = check_new_listings()
     for coin in new_listings:
