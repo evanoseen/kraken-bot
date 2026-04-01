@@ -12,3 +12,5 @@ MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.80"))
 RUN_INTERVAL_MINUTES = int(os.getenv("RUN_INTERVAL_MINUTES", "15"))
 DAILY_LOSS_LIMIT = float(os.getenv("DAILY_LOSS_LIMIT", "50.0"))
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
+STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", "0.10"))    # sell if down 10%
+TAKE_PROFIT_PCT = float(os.getenv("TAKE_PROFIT_PCT", "0.25"))  # sell if up 25%
