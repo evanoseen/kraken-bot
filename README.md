@@ -118,6 +118,14 @@ kraken-bot/
 └── requirements.txt
 ```
 
+## Daily Iteration
+
+This repo follows a daily iteration discipline. Each day a small, scoped improvement lands as a commit so the bot keeps compounding.
+
+- [DAILY_ITERATIONS.md](DAILY_ITERATIONS.md) holds the 30 task backlog (docs, tests, refactors, observability, features, ops).
+- [JOURNAL.md](JOURNAL.md) records what shipped each day.
+- Run `./scripts/daily.sh` from the repo root to see today's task.
+
 ## Risk Warning
 
 This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to test before going live. Set conservative `DAILY_LOSS_LIMIT` and `MAX_TRADE_AMOUNT` values. Past performance does not guarantee future results.
