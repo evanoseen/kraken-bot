@@ -21,3 +21,13 @@ One entry per day. Capture: what shipped, what surprised, what's next.
 **Surprised by:** How much of the bot is already done from an end-state perspective once you write the criteria down. 11 of 38 ISCs (operational core, all three signal sources, trading core) were already passing. The gap is engineering scaffold, not features.
 
 **Next:** Day 3, add a docstring to every function in `kraken_client.py`.
+
+---
+
+## Day 3, 2026-05-21
+
+**Shipped:** Added docstrings to the two undocumented functions in `kraken_client.py` — `get_client` (build the krakenex REST client) and `get_balance` (return CAD balance with USD fallback). Each docstring covers args, returns, and side effects per the backlog spec. The AST probe `all(ast.get_docstring(f) for f in funcs)` now returns `True` across the whole file.
+
+**Surprised by:** Five of seven functions in `kraken_client.py` already had docstrings — they just weren't on the ones that needed them most (the client constructor and the balance call, both first-touch surfaces for a reader). The gap was at the boundary, not in the body.
+
+**Next:** Day 4, write `STRATEGY.md` documenting the three signal sources (news, pump, listings) end to end.

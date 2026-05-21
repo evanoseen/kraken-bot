@@ -6,6 +6,11 @@ logger = logging.getLogger(__name__)
 
 
 def get_client():
+    """Build and return an authenticated krakenex REST client.
+
+    Side effects: reads `KRAKEN_API_KEY` and `KRAKEN_PRIVATE_KEY` from config
+    and attaches them to the client. No network call.
+    """
     k = krakenex.API()
     k.key = KRAKEN_API_KEY
     k.secret = KRAKEN_PRIVATE_KEY
@@ -13,6 +18,12 @@ def get_client():
 
 
 def get_balance(client) -> float:
+    """Return the account's fiat balance in CAD, falling back to USD if no CAD wallet.
+
+    Args: `client` is a krakenex API instance from `get_client()`.
+    Returns: float CAD (or USD) balance, or 0.0 on API error.
+    Side effects: one private REST call to Kraken's `Balance` endpoint; logs errors.
+    """
     resp = client.query_private("Balance")
     if resp.get("error"):
         logger.error(f"Balance error: {resp['error']}")
