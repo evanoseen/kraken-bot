@@ -31,3 +31,13 @@ One entry per day. Capture: what shipped, what surprised, what's next.
 **Surprised by:** Five of seven functions in `kraken_client.py` already had docstrings — they just weren't on the ones that needed them most (the client constructor and the balance call, both first-touch surfaces for a reader). The gap was at the boundary, not in the body.
 
 **Next:** Day 4, write `STRATEGY.md` documenting the three signal sources (news, pump, listings) end to end.
+
+---
+
+## Day 4, 2026-05-23
+
+**Shipped:** Authored `STRATEGY.md` end to end. Every signal source has its own section grounded in the actual code: what it watches, what it measures, what it emits, why it works, and what it deliberately doesn't do. Listing monitor pulls the Kraken blog RSS, pump detector hunts obscure CAD pairs under $5M daily volume with >=3x intraday spike, and news + social layer blends six RSS feeds with ~50 Nitter accounts before sending to Claude Opus 4.6 for signal extraction. Confidence math is named explicitly (pump uses `min(0.65 + spike/50, 0.95)`; news uses Claude output filtered by `MIN_CONFIDENCE`). The trading cycle is documented as a Mermaid flowchart with the six stages, and exit logic is laid out in a table covering stop loss, take profit, and news-driven sells. Closed with a "known structural weaknesses" section that maps each gap to a future backlog day so the doc stays honest.
+
+**Surprised by:** How asymmetric the strategy actually is. Entry is sophisticated — three independent catalyst-driven signals — but exit is just two fixed percentages off entry price. No trailing stop, no time-based exit, no signal-driven liquidation outside the held set. Writing it down made the imbalance obvious in a way the code never did.
+
+**Next:** Day 5, write `OPS_RUNBOOK.md` covering SSH access, systemd commands, log inspection, deploy, rollback, and triage steps.
