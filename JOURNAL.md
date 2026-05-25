@@ -41,3 +41,13 @@ One entry per day. Capture: what shipped, what surprised, what's next.
 **Surprised by:** How asymmetric the strategy actually is. Entry is sophisticated — three independent catalyst-driven signals — but exit is just two fixed percentages off entry price. No trailing stop, no time-based exit, no signal-driven liquidation outside the held set. Writing it down made the imbalance obvious in a way the code never did.
 
 **Next:** Day 5, write `OPS_RUNBOOK.md` covering SSH access, systemd commands, log inspection, deploy, rollback, and triage steps.
+
+---
+
+## Day 5, 2026-05-25
+
+**Shipped:** Authored `OPS_RUNBOOK.md` with nine sections — quick-reference card, SSH access, systemd commands, log inspection (both `journalctl` and the `bot.log` file logger), deploy procedure (with a hard warning about `scp -r` clobbering `.env` and an `rsync --exclude` fix), rollback procedure (git worktree path as preferred, in-place revert as backup, emergency stop as last resort), triage (organized by real symptoms: no trades for hours, failed state, Kraken API errors, position mismatch, "stop trading right now"), a server file map, an env-var reference table with live defaults, and a post-change verification trio.
+
+**Surprised by:** The deploy procedure I had in project memory (`scp -r /Users/evanoseen/kraken-bot root@204.168.204.221:/root/`) silently clobbers `.env` on the server every time. That's a real footgun and the runbook now flags it with an `rsync --exclude='.env'` alternative. Future me will thank present me.
+
+**Next:** Day 6, write `.env.example` listing every environment variable in `config.py` with placeholder values and per-line comments.
