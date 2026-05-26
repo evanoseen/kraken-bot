@@ -51,3 +51,13 @@ One entry per day. Capture: what shipped, what surprised, what's next.
 **Surprised by:** The deploy procedure I had in project memory (`scp -r /Users/evanoseen/kraken-bot root@204.168.204.221:/root/`) silently clobbers `.env` on the server every time. That's a real footgun and the runbook now flags it with an `rsync --exclude='.env'` alternative. Future me will thank present me.
 
 **Next:** Day 6, write `.env.example` listing every environment variable in `config.py` with placeholder values and per-line comments.
+
+---
+
+## Day 6, 2026-05-26
+
+**Shipped:** Authored `.env.example` covering every env var in `config.py`. Grouped into five sections — Secrets (Kraken API key, Kraken private key, Anthropic API key), Risk caps (MAX_TRADE_AMOUNT, MIN_CONFIDENCE, DAILY_LOSS_LIMIT), Exit thresholds (STOP_LOSS_PCT, TAKE_PROFIT_PCT), Cadence (RUN_INTERVAL_MINUTES), and Master switch (DRY_RUN). Each variable has a one or two line comment explaining what it does and how it interacts with the strategy. Header at the top documents the cp + edit workflow. `DRY_RUN=true` is the example default so anyone cloning the repo cannot accidentally go live.
+
+**Surprised by:** How many of these variables I've already documented elsewhere (STRATEGY.md, OPS_RUNBOOK.md, the project ISA). `.env.example` is the only one of those four that lives *inside* the development workflow — every other doc reaches into it. That's the right shape for a config template.
+
+**Next:** Day 7, add a Mermaid architecture diagram to `README.md` under a new "Architecture" section.
