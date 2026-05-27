@@ -19,6 +19,46 @@ Every 5 minutes the bot:
 4. Fetches 60 latest crypto headlines and sends them to Claude AI
 5. Combines signals and places market orders on Kraken
 
+## Architecture
+
+Three independent signal sources feed a single decision loop. The trader merges them, applies risk caps and exit logic, and routes orders through one Kraken REST client. Full strategy details live in [STRATEGY.md](STRATEGY.md).
+
+```mermaid
+flowchart LR
+    subgraph external["External sources"]
+        RSS["RSS feeds<br/>crypto news + ~50 Nitter accounts"]
+        BLOG["Kraken blog RSS"]
+        TICK["Kraken Ticker API"]
+        CLAUDE["Anthropic Claude<br/>claude-opus-4-6"]
+    end
+
+    subgraph signals["Signal layer"]
+        NF["news_fetcher.py"]
+        MM["market_matcher.py"]
+        LM["listing_monitor.py"]
+        PD["pump_detector.py"]
+    end
+
+    TRADER["trader.py<br/>cycle orchestrator"]
+    POS[("positions.json<br/>trades.csv")]
+    KC["kraken_client.py"]
+    KEX["Kraken Exchange<br/>REST API"]
+
+    RSS --> NF
+    NF --> MM
+    MM <--> CLAUDE
+    BLOG --> LM
+    TICK --> PD
+
+    MM --> TRADER
+    LM --> TRADER
+    PD --> TRADER
+
+    TRADER --> KC
+    KC --> KEX
+    TRADER <--> POS
+```
+
 ## Setup
 
 ### Prerequisites

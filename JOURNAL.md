@@ -61,3 +61,13 @@ One entry per day. Capture: what shipped, what surprised, what's next.
 **Surprised by:** How many of these variables I've already documented elsewhere (STRATEGY.md, OPS_RUNBOOK.md, the project ISA). `.env.example` is the only one of those four that lives *inside* the development workflow — every other doc reaches into it. That's the right shape for a config template.
 
 **Next:** Day 7, add a Mermaid architecture diagram to `README.md` under a new "Architecture" section.
+
+---
+
+## Day 7, 2026-05-27
+
+**Shipped:** Added an `## Architecture` section to `README.md` between `## How It Works` and `## Setup` so a top-down skim hits the diagram early. The Mermaid block is a left-to-right flowchart with three subgraphs (External sources, Signal layer, and the unwrapped trader-and-client core) and twelve edges. External sources include the RSS feeds + Nitter accounts, the Kraken blog RSS, the Kraken Ticker API, and Anthropic Claude. The signal layer holds news_fetcher, market_matcher, listing_monitor, and pump_detector. The trader merges all three signal streams, persists positions to disk, and routes orders through kraken_client to the Kraken Exchange REST API. A short intro paragraph above the diagram links to STRATEGY.md for the full math.
+
+**Surprised by:** GitHub's Mermaid renderer handles `<br/>` line breaks and emoji-free subgraph labels well, but it does NOT like unquoted node labels with dots or parentheses. Wrapped every label in double quotes (`["text"]`) up front to avoid the render-then-debug cycle.
+
+**Next:** Day 8, write `SECURITY.md` covering API key storage, key rotation, kill switch, network exposure, dependency policy, and incident response.
