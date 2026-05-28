@@ -71,3 +71,13 @@ One entry per day. Capture: what shipped, what surprised, what's next.
 **Surprised by:** GitHub's Mermaid renderer handles `<br/>` line breaks and emoji-free subgraph labels well, but it does NOT like unquoted node labels with dots or parentheses. Wrapped every label in double quotes (`["text"]`) up front to avoid the render-then-debug cycle.
 
 **Next:** Day 8, write `SECURITY.md` covering API key storage, key rotation, kill switch, network exposure, dependency policy, and incident response.
+
+---
+
+## Day 8, 2026-05-28
+
+**Shipped:** Authored `SECURITY.md` as the working threat model. Six required topics, each with a Threat, Posture, and Concrete actions block. API key storage section names the Kraken permission set the bot needs (Query Funds, Query Open Orders, Modify Orders, Create/Cancel Orders — withdrawal off) and gives a one-liner to grep the git history for accidental commits. Key rotation lays out the two-key-window procedure with `sed` recipes against `.env`. Kill switch documents the two existing halt mechanisms (`DRY_RUN=true` and `systemctl stop`) and points at Day 24's planned file-based kill switch. Network exposure section gives the `nmap` audit command, the sshd_config grep recipe, and an SSH login-attempts review. Dependency policy names `pip-audit` and a one-dep-at-a-time upgrade workflow. Incident response is a four-phase runbook (STOP → CAPTURE → INVESTIGATE → RECOVER) with copy-pasteable commands at every step. Closes with a hardening backlog mapping each future security item to its target backlog day.
+
+**Surprised by:** Writing the incident response section made me realize that without a JSONL trade log (Day 20) the forensic capture relies on `trades.csv` which is append-only but easy to corrupt. The Day 20 work just became more important than I had it scored.
+
+**Next:** Day 9, add the pytest scaffold (conftest.py with a `kraken_dryrun` fixture, tests folder, pytest in requirements.txt).
