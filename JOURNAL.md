@@ -81,3 +81,15 @@ One entry per day. Capture: what shipped, what surprised, what's next.
 **Surprised by:** Writing the incident response section made me realize that without a JSONL trade log (Day 20) the forensic capture relies on `trades.csv` which is append-only but easy to corrupt. The Day 20 work just became more important than I had it scored.
 
 **Next:** Day 9, add the pytest scaffold (conftest.py with a `kraken_dryrun` fixture, tests folder, pytest in requirements.txt).
+
+---
+
+## Day 9, 2026-05-29
+
+**Shipped:** Pytest scaffold. Added `pytest>=8.0.0` and `pytest-mock>=3.12.0` to `requirements.txt`. Created `tests/__init__.py`, `tests/conftest.py` with the `kraken_dryrun` fixture, and `tests/test_smoke.py` to prove the rig works. The fixture returns a `MagicMock` shaped like a `krakenex.API` client with `query_private` and `query_public` preloaded with canned responses for `Balance`, `OpenOrders`, `AddOrder`, `CancelOrder`, `AssetPairs`, and `Ticker` — every endpoint `kraken_client.py` actually calls. Tests can override per-endpoint with `side_effect` or replace return values directly. Updated `.gitignore` to exclude `venv/`, `.venv/`, and `.pytest_cache/` so the local venv never gets committed.
+
+Verified end to end: `./venv/bin/pytest --collect-only` exits 0 with 3 tests discovered; `./venv/bin/pytest -v` runs all 3 and they pass.
+
+**Surprised by:** `pytest --collect-only` with an empty `tests/` folder exits 5 ("no tests collected"), not 0. The done-when says exit 0. Caught it before shipping by adding a smoke test that exercises the fixture itself — also serves as a worked example for Days 10-12 when real per-module tests land.
+
+**Next:** Day 10, write `tests/test_market_matcher.py` — at least two tests covering a known coin match and an unknown coin handled gracefully.
