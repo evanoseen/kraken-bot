@@ -93,3 +93,21 @@ Verified end to end: `./venv/bin/pytest --collect-only` exits 0 with 3 tests dis
 **Surprised by:** `pytest --collect-only` with an empty `tests/` folder exits 5 ("no tests collected"), not 0. The done-when says exit 0. Caught it before shipping by adding a smoke test that exercises the fixture itself — also serves as a worked example for Days 10-12 when real per-module tests land.
 
 **Next:** Day 10, write `tests/test_market_matcher.py` — at least two tests covering a known coin match and an unknown coin handled gracefully.
+
+---
+
+## Day 10, 2026-05-30
+
+**Shipped:** First real unit tests against `market_matcher.analyze_news_for_trades`. Six test functions, eight test cases (one parametrized over DOGE/SHIB/PEPE). All mock `client.messages.create` via `mocker.patch.object` so no network calls fire. Covered branches:
+1. Happy path — a 0.95-confidence buy on a known coin survives MIN_CONFIDENCE (parametrized x3)
+2. Low confidence filter — a 0.30-confidence signal is dropped
+3. Unknown coin — Claude hallucinating a non-existent ticker does NOT crash (passes through; trader layer's `get_price` returns 0 and skips)
+4. Malformed JSON — non-JSON output is caught by the JSONDecodeError handler, returns `[]`
+5. Fenced code block — the ` ```json ... ``` ` wrapping is stripped before parse
+6. Anthropic exception — any RuntimeError from the SDK is caught, returns `[]`
+
+Full suite: 11 passed (3 smoke + 8 matcher).
+
+**Surprised by:** The function doesn't enforce that Claude's returned coins are in the `available_coins` list — it trusts whatever comes back. The trader layer's `get_price` is the actual safety net. That asymmetry is now pinned by a test, so any future tightening will have a place to land.
+
+**Next:** Day 11, write `tests/test_news_fetcher.py` — mock `feedparser.parse` and verify happy path, no-title skip, and link-based dedupe.
