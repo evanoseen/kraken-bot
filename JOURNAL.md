@@ -111,3 +111,22 @@ Full suite: 11 passed (3 smoke + 8 matcher).
 **Surprised by:** The function doesn't enforce that Claude's returned coins are in the `available_coins` list — it trusts whatever comes back. The trader layer's `get_price` is the actual safety net. That asymmetry is now pinned by a test, so any future tightening will have a place to land.
 
 **Next:** Day 11, write `tests/test_news_fetcher.py` — mock `feedparser.parse` and verify happy path, no-title skip, and link-based dedupe.
+
+---
+
+## Day 11, 2026-05-31
+
+**Shipped:** Six tests for `news_fetcher.fetch_top_headlines` and the `format_headlines_for_prompt` helper. All mock `feedparser.parse` and stub `fetch_twitter_signals` to `[]` so RSS-only behavior is isolated and no network calls fire. Cases:
+
+1. Happy path — three RSS entries become three correctly-shaped dicts with `title`, `summary`, `source: "news"`
+2. No-title skip — entries with empty or missing `title` are filtered out
+3. Title dedupe across feeds — the same headline syndicated to all six RSS feeds appears once (the code dedupes by **title**, not by link as the backlog assumed)
+4. `max_articles` cap — `fetch_top_headlines(max_articles=5)` truncates to 5
+5. Formatter emoji prefixes — `📰` for RSS, `🐦` for Twitter
+6. Feedparser exception resilience — one feed raising does not crash the function
+
+Full suite: 17 passed (3 smoke + 8 matcher + 6 news_fetcher).
+
+**Surprised by:** The backlog said "deduplicates by link" but the code dedupes by title. Reasonable design — RSS items often have the same article re-syndicated under different links — but worth knowing for future. I pinned the actual behavior with a test; if the dedup key ever changes to link, that test will fail and signal the contract shift.
+
+**Next:** Day 12, write `tests/test_kraken_client.py` — happy path on a known Balance response shape and a 5xx-raises-sensible-exception path.
