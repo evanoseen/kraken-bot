@@ -130,3 +130,22 @@ Full suite: 17 passed (3 smoke + 8 matcher + 6 news_fetcher).
 **Surprised by:** The backlog said "deduplicates by link" but the code dedupes by title. Reasonable design — RSS items often have the same article re-syndicated under different links — but worth knowing for future. I pinned the actual behavior with a test; if the dedup key ever changes to link, that test will fail and signal the contract shift.
 
 **Next:** Day 12, write `tests/test_kraken_client.py` — happy path on a known Balance response shape and a 5xx-raises-sensible-exception path.
+
+---
+
+## Day 12, 2026-06-01
+
+**Shipped:** 11 tests for `kraken_client` covering the wrapper boundary — every function the trader calls. All reuse the `kraken_dryrun` fixture from `conftest.py` so no `requests-mock` dependency added. Cases:
+
+- `get_balance`: happy path (100.00 CAD from default fixture), CAD→USD fallback, Kraken error → 0.0, empty wallets → 0.0
+- `get_holdings`: extracts non-fiat non-zero balances with cleaned tickers; Kraken error → `{}`
+- `get_tradable_coins`: returns sorted CAD/USD coin list with fiat removed
+- `get_pair`: returns `None` for unknown coins
+- `get_price`: returns `0.0` for unknown coins
+- `place_order`: rejects zero-volume trades; returns `None` when no pair found
+
+Full suite: 28 passed (3 smoke + 8 matcher + 6 news_fetcher + 11 kraken_client).
+
+**Surprised by:** Two backlog mismatches with reality. Backlog said `requests-mock` and `KrakenClient.get_balance()` raises on HTTP 5xx — but `kraken_client.py` is shaped as free functions over a `krakenex.API` instance, and on Kraken-returned errors it logs and returns `0.0` (or `None`/`{}` depending on function). Tests pin the actual contract. Switching error paths to *raise* would let the trader differentiate "Kraken is down" from "Kraken says balance is zero" — that's a future hardening candidate, not Day 12 scope.
+
+**Next:** Day 13, add GitHub Actions CI workflow (`.github/workflows/test.yml`) that runs `pytest` on Python 3.11; add a status badge to the top of README.
