@@ -156,6 +156,8 @@ Full suite: 28 passed (3 smoke + 8 matcher + 6 news_fetcher + 11 kraken_client).
 
 **Shipped:** GitHub Actions CI. New `.github/workflows/test.yml` triggers on push to main and on pull requests, runs on `ubuntu-latest` with Python 3.11, caches pip, installs full `requirements.txt`, and runs `pytest -v`. Placeholder env vars for `ANTHROPIC_API_KEY`, `KRAKEN_API_KEY`, and `KRAKEN_PRIVATE_KEY` are baked into the job so the Anthropic SDK constructor in `market_matcher.py` (runs at module-load) doesn't blow up — tests mock all real network calls, the placeholders only satisfy the SDK's "must be set" guard. Added the Tests status badge to the top of `README.md` right below the title so it shows on the repo home page.
 
-**Surprised by:** The Anthropic SDK validates `api_key` at constructor time, not at first-request time. That meant the CI workflow had to fake an env var even though zero real API calls happen during tests. Saved a debugging cycle by setting it preemptively.
+**Surprised by:** First CI run on the Day 13 commit (`1dcf3aa`) went RED. Two `test_kraken_client.py` tests assumed Evan's local WIP `clean_asset()` refactor of `kraken_client.py`, but CI checks out HEAD which uses the simpler `key.lstrip('X').lstrip('Z')` variant. Locally the tests ran against the working tree (with WIP) so they were green; on CI they hit the HEAD code path and failed. Fast-follow commit `ccdeae4` made the tests accept either ticker form ("DOGE"/"XDG"/"DG" and "BTC"/"XBT"/"BT") so they pass against both versions. Second CI run: 28/28 passed, 24 seconds end-to-end. Badge resolves green.
+
+The deeper lesson: tests that assume working-tree state, not committed-tree state, will lie to you about CI readiness. From here forward, simulate CI locally with `git stash push <wip>` before claiming a test file is portable.
 
 **Next:** Day 14, replace every `print()` in the trading modules with a proper `logging` call; the root logger config moves into `main.py`.
