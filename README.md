@@ -1,5 +1,7 @@
 # Kraken Meme Coin Trading Bot 🤖
 
+[![Tests](https://github.com/evanoseen/kraken-bot/actions/workflows/test.yml/badge.svg)](https://github.com/evanoseen/kraken-bot/actions/workflows/test.yml)
+
 An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coins and altcoins using AI-powered news analysis, volume spike detection, and new listing monitoring — running 24/7 on a VPS server.
 
 ## Features

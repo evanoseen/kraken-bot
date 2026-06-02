@@ -149,3 +149,13 @@ Full suite: 28 passed (3 smoke + 8 matcher + 6 news_fetcher + 11 kraken_client).
 **Surprised by:** Two backlog mismatches with reality. Backlog said `requests-mock` and `KrakenClient.get_balance()` raises on HTTP 5xx — but `kraken_client.py` is shaped as free functions over a `krakenex.API` instance, and on Kraken-returned errors it logs and returns `0.0` (or `None`/`{}` depending on function). Tests pin the actual contract. Switching error paths to *raise* would let the trader differentiate "Kraken is down" from "Kraken says balance is zero" — that's a future hardening candidate, not Day 12 scope.
 
 **Next:** Day 13, add GitHub Actions CI workflow (`.github/workflows/test.yml`) that runs `pytest` on Python 3.11; add a status badge to the top of README.
+
+---
+
+## Day 13, 2026-06-02
+
+**Shipped:** GitHub Actions CI. New `.github/workflows/test.yml` triggers on push to main and on pull requests, runs on `ubuntu-latest` with Python 3.11, caches pip, installs full `requirements.txt`, and runs `pytest -v`. Placeholder env vars for `ANTHROPIC_API_KEY`, `KRAKEN_API_KEY`, and `KRAKEN_PRIVATE_KEY` are baked into the job so the Anthropic SDK constructor in `market_matcher.py` (runs at module-load) doesn't blow up — tests mock all real network calls, the placeholders only satisfy the SDK's "must be set" guard. Added the Tests status badge to the top of `README.md` right below the title so it shows on the repo home page.
+
+**Surprised by:** The Anthropic SDK validates `api_key` at constructor time, not at first-request time. That meant the CI workflow had to fake an env var even though zero real API calls happen during tests. Saved a debugging cycle by setting it preemptively.
+
+**Next:** Day 14, replace every `print()` in the trading modules with a proper `logging` call; the root logger config moves into `main.py`.

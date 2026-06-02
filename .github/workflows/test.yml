@@ -1,0 +1,38 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    env:
+      # market_matcher.py instantiates anthropic.Anthropic(api_key=...) at
+      # import time. The tests mock all network calls but the SDK
+      # constructor still validates that an api_key is present, so we
+      # pass a placeholder. These are never real secrets.
+      ANTHROPIC_API_KEY: ci-placeholder-not-a-real-key
+      KRAKEN_API_KEY: ci-placeholder-not-a-real-key
+      KRAKEN_PRIVATE_KEY: Y2ktcGxhY2Vob2xkZXItbm90LWEtcmVhbC1rZXk=
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        run: pytest -v
