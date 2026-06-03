@@ -6,7 +6,7 @@ from config import RUN_INTERVAL_MINUTES
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler("bot.log"),

@@ -161,3 +161,17 @@ Full suite: 28 passed (3 smoke + 8 matcher + 6 news_fetcher + 11 kraken_client).
 The deeper lesson: tests that assume working-tree state, not committed-tree state, will lie to you about CI readiness. From here forward, simulate CI locally with `git stash push <wip>` before claiming a test file is portable.
 
 **Next:** Day 14, replace every `print()` in the trading modules with a proper `logging` call; the root logger config moves into `main.py`.
+
+---
+
+## Day 14, 2026-06-03
+
+**Shipped:** Logging configuration audit + format upgrade. Audited the trading modules with the exact done-when probe: `grep -rn "print(" *.py` returns zero matches — every module already uses `logger = logging.getLogger(__name__)` and proper level methods. The remaining gap was the format string in `main.py`: it read `"%(asctime)s [%(levelname)s] %(message)s"` (no module name); the Day 14 backlog spec is `"[%(asctime)s] %(levelname)s %(name)s: %(message)s"`. Updated `main.py` to use the spec format. Now every log line in journalctl reveals which module emitted it (kraken_client, market_matcher, pump_detector, etc.) — searchable observability gain.
+
+Locked the contract with `tests/test_logging_config.py`: 13 tests covering the required format string, INFO level, both handlers (stream + file), no-bare-`print()` audit parametrized over all 9 trading modules, and a getLogger smoke check.
+
+Full suite: 41 passed (3 smoke + 8 matcher + 6 news_fetcher + 11 kraken_client + 13 logging_config).
+
+**Surprised by:** The hardest part of "replace print with logging" was that there were no print calls left to replace. The real work was the format string — adding `%(name)s` so logs become greppable by module. Writing the test first surfaced the misalignment in 5 seconds.
+
+**Next:** Day 15, add type hints to every function in `kraken_client.py` and get `mypy --ignore-missing-imports kraken_client.py` to zero errors.
