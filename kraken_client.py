@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Optional
+
 import krakenex
 import logging
 from config import KRAKEN_API_KEY, KRAKEN_PRIVATE_KEY
@@ -5,7 +9,7 @@ from config import KRAKEN_API_KEY, KRAKEN_PRIVATE_KEY
 logger = logging.getLogger(__name__)
 
 
-def get_client():
+def get_client() -> krakenex.API:
     """Build and return an authenticated krakenex REST client.
 
     Side effects: reads `KRAKEN_API_KEY` and `KRAKEN_PRIVATE_KEY` from config
@@ -17,7 +21,7 @@ def get_client():
     return k
 
 
-def get_balance(client) -> float:
+def get_balance(client: krakenex.API) -> float:
     """Return the account's fiat balance in CAD, falling back to USD if no CAD wallet.
 
     Args: `client` is a krakenex API instance from `get_client()`.
@@ -32,7 +36,7 @@ def get_balance(client) -> float:
     return float(balances.get("ZCAD", balances.get("ZUSD", balances.get("CAD", balances.get("USD", 0)))))
 
 
-def get_holdings(client) -> dict:
+def get_holdings(client: krakenex.API) -> dict[str, float]:
     """Return dict of {symbol: amount} for coins currently held."""
     resp = client.query_private("Balance")
     if resp.get("error"):
@@ -48,7 +52,7 @@ def get_holdings(client) -> dict:
     return holdings
 
 
-def get_tradable_coins(client) -> list:
+def get_tradable_coins(client: krakenex.API) -> list[str]:
     """Fetch all coins tradable in CAD or USD on Kraken."""
     resp = client.query_public("AssetPairs")
     if resp.get("error"):
@@ -68,7 +72,7 @@ def get_tradable_coins(client) -> list:
     return sorted(list(coins))
 
 
-def get_pair(client, coin: str) -> str:
+def get_pair(client: krakenex.API, coin: str) -> Optional[str]:
     """Find the best trading pair for a coin (prefer CAD, fallback USD)."""
     resp = client.query_public("AssetPairs")
     if resp.get("error"):
@@ -89,7 +93,7 @@ def get_pair(client, coin: str) -> str:
     return cad_pair or usd_pair
 
 
-def get_price(client, coin: str) -> float:
+def get_price(client: krakenex.API, coin: str) -> float:
     """Get current ask price for a coin."""
     pair = get_pair(client, coin)
     if not pair:
@@ -103,7 +107,13 @@ def get_price(client, coin: str) -> float:
     return 0.0
 
 
-def place_order(client, coin: str, action: str, amount_cad: float, price: float):
+def place_order(
+    client: krakenex.API,
+    coin: str,
+    action: str,
+    amount_cad: float,
+    price: float,
+) -> Optional[dict]:
     """Place a market order. action: 'buy' or 'sell'"""
     pair = get_pair(client, coin)
     if not pair:

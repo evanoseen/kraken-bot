@@ -175,3 +175,21 @@ Full suite: 41 passed (3 smoke + 8 matcher + 6 news_fetcher + 11 kraken_client +
 **Surprised by:** The hardest part of "replace print with logging" was that there were no print calls left to replace. The real work was the format string — adding `%(name)s` so logs become greppable by module. Writing the test first surfaced the misalignment in 5 seconds.
 
 **Next:** Day 15, add type hints to every function in `kraken_client.py` and get `mypy --ignore-missing-imports kraken_client.py` to zero errors.
+
+---
+
+## Day 15, 2026-06-04
+
+**Shipped:** Full type hints on every function in `kraken_client.py` — `get_client`, `get_balance`, `get_holdings`, `get_tradable_coins`, `get_pair`, `get_price`, `place_order`. Used `from __future__ import annotations` so modern syntax (`dict[str, float]`, `list[str]`) works on Python 3.8+. `get_pair` and `place_order` now correctly declare `Optional[str]` / `Optional[dict]` returns since both return None on failure paths. `client: krakenex.API` everywhere — mypy treats it as Any (krakenex has no stubs) but the readable annotation documents intent. Added `mypy>=1.0.0` to `requirements.txt` so CI runs the same toolchain.
+
+Locked the contract with two tests in `tests/test_kraken_client_types.py`:
+1. `mypy --ignore-missing-imports kraken_client.py` returns zero errors — the done-when probe verbatim, runs in CI now
+2. AST audit — every function in `kraken_client.py` has annotations on every arg and a return annotation. Catches future regressions (someone adding an untyped helper).
+
+Edits were signature-only (no body changes) so Evan's still-stashed `clean_asset` refactor pops back on top with no conflict.
+
+Verified: `mypy --ignore-missing-imports kraken_client.py` → "Success: no issues found in 1 source file"; full suite 43 passed.
+
+**Surprised by:** `get_pair` was declared `-> str` but returns `None` for unknown coins — silent lie in the old signature that the test suite never caught (the existing test only asserted `is None`, not the type). Day 15 made me read the existing signature carefully and the `Optional[str]` upgrade is a real correctness gain, not just decoration.
+
+**Next:** Day 16, type hints on `trader.py` with the same `mypy --ignore-missing-imports trader.py` zero-error gate.
