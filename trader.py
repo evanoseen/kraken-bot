@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from typing import Optional
+
+import krakenex
 import logging
 from kraken_client import get_client, get_balance, get_holdings, get_tradable_coins, get_price, place_order
 from news_fetcher import fetch_top_headlines, format_headlines_for_prompt
@@ -9,10 +14,10 @@ from positions import record_buy, remove_position, get_position, log_trade
 
 logger = logging.getLogger(__name__)
 
-_starting_balance = None
+_starting_balance: Optional[float] = None
 
 
-def check_exit_conditions(client, holdings: dict):
+def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> None:
     """Check all held coins for stop-loss or take-profit triggers."""
     for coin, amount in holdings.items():
         position = get_position(coin)
@@ -60,7 +65,7 @@ def check_exit_conditions(client, holdings: dict):
                 logger.info(f"[DRY RUN] Would take-profit sell {coin} | P&L: +${pnl:.2f}")
 
 
-def run_trading_cycle():
+def run_trading_cycle() -> None:
     global _starting_balance
 
     logger.info("=" * 50)

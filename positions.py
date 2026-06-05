@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import json
 import os
 import logging
 from datetime import datetime
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +53,7 @@ def get_position(coin: str) -> dict | None:
     return load_positions().get(coin)
 
 
-def log_trade(coin: str, action: str, price: float, amount_cad: float, pnl: float = None):
+def log_trade(coin: str, action: str, price: float, amount_cad: float, pnl: Optional[float] = None) -> None:
     """Append a trade to trades.csv."""
     try:
         write_header = not os.path.exists("trades.csv")

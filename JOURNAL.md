@@ -193,3 +193,21 @@ Verified: `mypy --ignore-missing-imports kraken_client.py` → "Success: no issu
 **Surprised by:** `get_pair` was declared `-> str` but returns `None` for unknown coins — silent lie in the old signature that the test suite never caught (the existing test only asserted `is None`, not the type). Day 15 made me read the existing signature carefully and the `Optional[str]` upgrade is a real correctness gain, not just decoration.
 
 **Next:** Day 16, type hints on `trader.py` with the same `mypy --ignore-missing-imports trader.py` zero-error gate.
+
+---
+
+## Day 16, 2026-06-05
+
+**Shipped:** Full type hints on `trader.py`. Both functions annotated — `check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> None` and `run_trading_cycle() -> None` — plus the module-level `_starting_balance: Optional[float] = None`. Used `from __future__ import annotations` for forward syntax compat.
+
+Added `mypy.ini` at the repo root with `follow_imports = silent` and `ignore_missing_imports = True`. This makes per-file mypy probes self-contained: mypy reads transitive imports for inference but only reports errors in the named file. The Day 15 + Day 16 + future "type module X" days each get a clean done-when gate without needing to fix every other module first.
+
+**Real bug surfaced and fixed:** When I typed `trader.py`, mypy correctly flagged that `trader.py:195` calls `positions.log_trade(..., pnl)` where `pnl` is `Optional[float]`, but `positions.log_trade` was declared `pnl: float = None` — an implicit-Optional signature bug. One-line surgical fix to `positions.py`: changed the signature to `pnl: Optional[float] = None` (and added `from __future__ import annotations` + `from typing import Optional`). Both `positions.py` and `trader.py` are now signature-correct on the pnl pathway.
+
+Contract locked with `tests/test_trader_types.py` (mirrors `test_kraken_client_types.py`): mypy probe + AST audit of every function signature.
+
+Verified: `mypy --ignore-missing-imports trader.py` → "Success: no issues found in 1 source file"; Day 15 probe still clean; full suite 45 passed.
+
+**Surprised by:** The mypy noise from transitive imports (14 errors before any work) was *almost all* historical drift — implicit Optional, missing requests stubs, Anthropic SDK union types — that had nothing to do with trader.py. Per-file mypy config is the right discipline for an existing untyped codebase: don't try to fix everything at once, fix one module per day.
+
+**Next:** Day 17, extract a `Config` dataclass from `config.py` so callers get attribute access (`c.max_trade_amount`) instead of module globals, and update every callsite.
