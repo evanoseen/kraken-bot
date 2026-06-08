@@ -1,16 +1,75 @@
+"""All bot configuration as a single frozen dataclass.
+
+Day 17 extracted env-var reading from module-level globals into a `Config`
+dataclass. Two access patterns:
+
+  Recommended (convenience, module-load):
+      from config import cfg
+      use(cfg.max_trade_amount)
+
+  Explicit (preferred for tests):
+      from config import Config
+      c = Config.from_env()
+      use(c.max_trade_amount)
+
+The frozen dataclass gives attribute access + type safety + repr without
+risking mid-cycle mutation of a tunable.
+"""
+from __future__ import annotations
+
 import os
+from dataclasses import dataclass
+from typing import Optional
+
 from dotenv import load_dotenv
 
-load_dotenv()
 
-KRAKEN_API_KEY = os.getenv("KRAKEN_API_KEY")
-KRAKEN_PRIVATE_KEY = os.getenv("KRAKEN_PRIVATE_KEY")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+@dataclass(frozen=True)
+class Config:
+    """Every environment variable the bot reads, in one place.
 
-MAX_TRADE_AMOUNT = float(os.getenv("MAX_TRADE_AMOUNT", "25.0"))
-MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.80"))
-RUN_INTERVAL_MINUTES = int(os.getenv("RUN_INTERVAL_MINUTES", "15"))
-DAILY_LOSS_LIMIT = float(os.getenv("DAILY_LOSS_LIMIT", "50.0"))
-DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
-STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", "0.10"))    # sell if down 10%
-TAKE_PROFIT_PCT = float(os.getenv("TAKE_PROFIT_PCT", "0.25"))  # sell if up 25%
+    Secrets are Optional[str] because they may be unset at construction time
+    (CI placeholders, tests). The bot's first private REST call is when a
+    real key actually matters; until then None is permissible.
+    """
+
+    # Secrets
+    kraken_api_key: Optional[str]
+    kraken_private_key: Optional[str]
+    anthropic_api_key: Optional[str]
+
+    # Risk caps
+    max_trade_amount: float
+    min_confidence: float
+    daily_loss_limit: float
+
+    # Exit thresholds
+    stop_loss_pct: float
+    take_profit_pct: float
+
+    # Cadence
+    run_interval_minutes: int
+
+    # Master switch
+    dry_run: bool
+
+    @classmethod
+    def from_env(cls) -> "Config":
+        """Load every field from the process environment, falling back to .env via dotenv."""
+        load_dotenv()
+        return cls(
+            kraken_api_key=os.getenv("KRAKEN_API_KEY"),
+            kraken_private_key=os.getenv("KRAKEN_PRIVATE_KEY"),
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
+            max_trade_amount=float(os.getenv("MAX_TRADE_AMOUNT", "25.0")),
+            min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.80")),
+            daily_loss_limit=float(os.getenv("DAILY_LOSS_LIMIT", "50.0")),
+            stop_loss_pct=float(os.getenv("STOP_LOSS_PCT", "0.10")),
+            take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.25")),
+            run_interval_minutes=int(os.getenv("RUN_INTERVAL_MINUTES", "15")),
+            dry_run=os.getenv("DRY_RUN", "true").lower() == "true",
+        )
+
+
+# Module-level singleton for caller ergonomics.
+cfg: Config = Config.from_env()

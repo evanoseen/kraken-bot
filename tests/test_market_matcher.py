@@ -68,7 +68,7 @@ def test_known_coin_high_confidence_signal_passes(patched_market_matcher, coin):
     assert len(signals) == 1
     assert signals[0]["coin"] == coin
     assert signals[0]["action"] == "buy"
-    assert signals[0]["confidence"] >= mm.MIN_CONFIDENCE
+    assert signals[0]["confidence"] >= mm.cfg.min_confidence
 
 
 def test_low_confidence_signal_filtered_out(patched_market_matcher):

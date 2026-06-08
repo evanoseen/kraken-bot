@@ -211,3 +211,24 @@ Verified: `mypy --ignore-missing-imports trader.py` → "Success: no issues foun
 **Surprised by:** The mypy noise from transitive imports (14 errors before any work) was *almost all* historical drift — implicit Optional, missing requests stubs, Anthropic SDK union types — that had nothing to do with trader.py. Per-file mypy config is the right discipline for an existing untyped codebase: don't try to fix everything at once, fix one module per day.
 
 **Next:** Day 17, extract a `Config` dataclass from `config.py` so callers get attribute access (`c.max_trade_amount`) instead of module globals, and update every callsite.
+
+---
+
+## Day 17, 2026-06-08
+
+**Shipped:** `config.py` is now a frozen `Config` dataclass with a `Config.from_env()` classmethod and a module-level `cfg = Config.from_env()` singleton for ergonomics. Every env var is one typed field — `kraken_api_key`, `kraken_private_key`, `anthropic_api_key`, `max_trade_amount`, `min_confidence`, `daily_loss_limit`, `stop_loss_pct`, `take_profit_pct`, `run_interval_minutes`, `dry_run`. Secrets are `Optional[str]` (None is permissible at construction time; the bot's first private REST call is when a real key matters). Numerics get the right scalar types.
+
+Updated all four callers:
+- `main.py`: `RUN_INTERVAL_MINUTES` → `cfg.run_interval_minutes`
+- `trader.py`: `MAX_TRADE_AMOUNT`, `DAILY_LOSS_LIMIT`, `DRY_RUN`, `STOP_LOSS_PCT`, `TAKE_PROFIT_PCT` → `cfg.*` (kept the documentation string `"Set DRY_RUN=false in .env to go live"` untouched since that names the env var, not a Python reference)
+- `kraken_client.py`: `KRAKEN_API_KEY`, `KRAKEN_PRIVATE_KEY` → `cfg.*`
+- `market_matcher.py`: `ANTHROPIC_API_KEY`, `MIN_CONFIDENCE` → `cfg.*`
+- `tests/test_market_matcher.py`: `mm.MIN_CONFIDENCE` → `mm.cfg.min_confidence`
+
+Contract locked with `tests/test_config.py` (6 tests): Config is a frozen dataclass, `Config.from_env()` returns an instance, the `cfg` singleton is a Config, every expected field is present (set-equality against an authoritative list catches both missing and rogue additions), field types match intent, frozen blocks mutation.
+
+Verified: done-when probe `from config import Config; c = Config.from_env()` runs and returns a populated Config. mypy clean on trader, kraken_client, and config. Full suite 51 passed (45 prior + 6 new).
+
+**Surprised by:** The `test_no_bare_print_calls_in_trading_modules[config.py]` test failed first because the original docstring example had `print(cfg.max_trade_amount)` as a usage demo — the AST-free regex audit (intentionally simple) doesn't distinguish docstrings from code. Changed the example to `use(cfg.max_trade_amount)` rather than make the audit smarter. The simpler rule reads cleaner and catches real bugs faster than a complex one that has to understand Python lexical scopes.
+
+**Next:** Day 18, add `tenacity` retries with exponential backoff to every Kraken API method in `kraken_client.py`.

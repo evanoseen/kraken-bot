@@ -4,7 +4,7 @@ from typing import Optional
 
 import krakenex
 import logging
-from config import KRAKEN_API_KEY, KRAKEN_PRIVATE_KEY
+from config import cfg
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,8 @@ def get_client() -> krakenex.API:
     and attaches them to the client. No network call.
     """
     k = krakenex.API()
-    k.key = KRAKEN_API_KEY
-    k.secret = KRAKEN_PRIVATE_KEY
+    k.key = cfg.kraken_api_key
+    k.secret = cfg.kraken_private_key
     return k
 
 

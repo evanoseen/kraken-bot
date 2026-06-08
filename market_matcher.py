@@ -1,10 +1,10 @@
 import json
 import logging
 import anthropic
-from config import ANTHROPIC_API_KEY, MIN_CONFIDENCE
+from config import cfg
 
 logger = logging.getLogger(__name__)
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
 
 
 def analyze_news_for_trades(headlines: str, available_coins: list) -> list:
@@ -32,7 +32,7 @@ Respond ONLY with a valid JSON array. Each item must have:
 - "confidence": float 0.0–1.0
 - "reasoning": one sentence
 
-Only include confidence >= {MIN_CONFIDENCE}. If no signals, return: []
+Only include confidence >= {cfg.min_confidence}. If no signals, return: []
 
 JSON array:"""
 
@@ -50,7 +50,7 @@ JSON array:"""
                 raw = raw[4:]
 
         signals = json.loads(raw)
-        filtered = [s for s in signals if s.get("confidence", 0) >= MIN_CONFIDENCE]
+        filtered = [s for s in signals if s.get("confidence", 0) >= cfg.min_confidence]
 
         for s in filtered:
             logger.info(f"Signal: {s['action'].upper()} {s['coin']} | Confidence: {s['confidence']} | {s['reasoning']}")

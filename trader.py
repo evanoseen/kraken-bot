@@ -9,7 +9,7 @@ from news_fetcher import fetch_top_headlines, format_headlines_for_prompt
 from market_matcher import analyze_news_for_trades
 from pump_detector import find_pumping_coins
 from listing_monitor import check_new_listings
-from config import MAX_TRADE_AMOUNT, DAILY_LOSS_LIMIT, DRY_RUN, STOP_LOSS_PCT, TAKE_PROFIT_PCT
+from config import cfg
 from positions import record_buy, remove_position, get_position, log_trade
 
 logger = logging.getLogger(__name__)
@@ -34,13 +34,13 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
         current_value = amount * price
         pnl = current_value - amount_cad
 
-        if pct_change <= -STOP_LOSS_PCT:
+        if pct_change <= -cfg.stop_loss_pct:
             logger.warning(
                 f"STOP-LOSS triggered: {coin} | "
                 f"entry ${entry_price:.8f} → now ${price:.8f} "
                 f"({pct_change*100:.1f}%) | P&L: ${pnl:.2f} CAD"
             )
-            if not DRY_RUN:
+            if not cfg.dry_run:
                 result = place_order(client, coin, "sell", current_value, price)
                 if result:
                     log_trade(coin, "sell_stoploss", price, current_value, pnl)
@@ -49,13 +49,13 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
             else:
                 logger.info(f"[DRY RUN] Would stop-loss sell {coin} | P&L: ${pnl:.2f}")
 
-        elif pct_change >= TAKE_PROFIT_PCT:
+        elif pct_change >= cfg.take_profit_pct:
             logger.info(
                 f"TAKE-PROFIT triggered: {coin} | "
                 f"entry ${entry_price:.8f} → now ${price:.8f} "
                 f"(+{pct_change*100:.1f}%) | P&L: +${pnl:.2f} CAD"
             )
-            if not DRY_RUN:
+            if not cfg.dry_run:
                 result = place_order(client, coin, "sell", current_value, price)
                 if result:
                     log_trade(coin, "sell_takeprofit", price, current_value, pnl)
@@ -69,7 +69,7 @@ def run_trading_cycle() -> None:
     global _starting_balance
 
     logger.info("=" * 50)
-    if DRY_RUN:
+    if cfg.dry_run:
         logger.info("DRY RUN MODE — no real orders will be placed")
     logger.info("Starting trading cycle...")
 
@@ -92,7 +92,7 @@ def run_trading_cycle() -> None:
         logger.info(f"Starting balance: ${_starting_balance:.2f}")
 
     daily_loss = _starting_balance - balance
-    if daily_loss >= DAILY_LOSS_LIMIT:
+    if daily_loss >= cfg.daily_loss_limit:
         logger.warning(f"Daily loss limit hit (${daily_loss:.2f} lost). Stopping for today.")
         return
 
@@ -118,8 +118,8 @@ def run_trading_cycle() -> None:
         logger.info(f"NEW LISTING BUY: {coin} — buying immediately!")
         price = get_price(client, coin)
         if price:
-            trade_amount = min(MAX_TRADE_AMOUNT, balance * 0.3)
-            if not DRY_RUN:
+            trade_amount = min(cfg.max_trade_amount, balance * 0.3)
+            if not cfg.dry_run:
                 result = place_order(client, coin, "buy", trade_amount, price)
                 if result:
                     record_buy(coin, price, trade_amount)
@@ -170,16 +170,16 @@ def run_trading_cycle() -> None:
             logger.warning(f"Could not get price for {coin}")
             continue
 
-        trade_amount = min(MAX_TRADE_AMOUNT * confidence, balance * 0.25)
+        trade_amount = min(cfg.max_trade_amount * confidence, balance * 0.25)
 
         logger.info(
-            f"{'[DRY RUN] ' if DRY_RUN else ''}Signal: {action.upper()} "
+            f"{'[DRY RUN] ' if cfg.dry_run else ''}Signal: {action.upper()} "
             f"${trade_amount:.2f} of {coin} @ ${price:.8f} "
             f"| Confidence: {confidence:.2f}"
         )
         logger.info(f"  Reason: {signal['reasoning']}")
 
-        if not DRY_RUN:
+        if not cfg.dry_run:
             result = place_order(client, coin, action, trade_amount, price)
             if result:
                 if action == "buy":
