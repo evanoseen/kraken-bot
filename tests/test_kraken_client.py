@@ -49,7 +49,7 @@ def test_get_balance_returns_zero_on_kraken_error(kraken_dryrun):
 
     kraken_dryrun.query_private.side_effect = None
     kraken_dryrun.query_private.return_value = {
-        "error": ["EService:Unavailable"],
+        "error": ["EAPI:Invalid key"],
         "result": {},
     }
 
@@ -106,7 +106,7 @@ def test_get_holdings_returns_empty_on_kraken_error(kraken_dryrun):
 
     kraken_dryrun.query_private.side_effect = None
     kraken_dryrun.query_private.return_value = {
-        "error": ["EService:Unavailable"],
+        "error": ["EAPI:Invalid key"],
         "result": {},
     }
 

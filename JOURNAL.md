@@ -232,3 +232,27 @@ Verified: done-when probe `from config import Config; c = Config.from_env()` run
 **Surprised by:** The `test_no_bare_print_calls_in_trading_modules[config.py]` test failed first because the original docstring example had `print(cfg.max_trade_amount)` as a usage demo — the AST-free regex audit (intentionally simple) doesn't distinguish docstrings from code. Changed the example to `use(cfg.max_trade_amount)` rather than make the audit smarter. The simpler rule reads cleaner and catches real bugs faster than a complex one that has to understand Python lexical scopes.
 
 **Next:** Day 18, add `tenacity` retries with exponential backoff to every Kraken API method in `kraken_client.py`.
+
+---
+
+## Day 18, 2026-06-09
+
+**Shipped:** `tenacity` retries on every Kraken API call. Added `tenacity>=8.0.0` to requirements. Rewrote `kraken_client.py` around two private helpers — `_call_private` and `_call_public` — that are the only functions that actually touch the network. Both are wrapped with a shared `_retry_kraken` decorator: `stop_after_attempt(3)`, `wait_exponential(min=1, max=10)`, `before_sleep_log` so every retry attempt logs at WARNING level. The six public functions (`get_balance`, `get_holdings`, `get_tradable_coins`, `get_pair`, `get_price`, `place_order`) delegate to the helpers and inherit retry for free.
+
+Transient (retried) errors are classified by substring match in a small allowlist: `EAPI:Rate limit`, `EService:Unavailable`, `EService:Busy`, plus Python `ConnectionError` / `TimeoutError` if krakenex raises at the HTTP layer. Non-transient errors (`EAPI:Invalid key`, `EOrder:Invalid arguments`, etc.) return immediately — wasting retries on auth bugs and validation errors is worse than failing fast.
+
+Contract locked with `tests/test_kraken_retry.py` (6 tests, all running in ~0.1s with `wait_none()` monkeypatch):
+1. **AST audit** — every public Kraken function must call either `_call_private` or `_call_public`; calling `client.query_private(...)` directly is flagged. Catches future regressions.
+2. **Rate-limit retry then succeeds** — `EAPI:Rate limit` × 2 + success → final value returned, `query_private` called exactly 3 times
+3. **Rate-limit exhausts retries** — `EAPI:Rate limit` × 5 → `stop_after_attempt(3)` caps invocations at 3, function returns the default (0.0)
+4. **Service-unavailable is also transient** — same retry contract on `EService:Unavailable`
+5. **Invalid-key does NOT retry** — non-transient error returns immediately, exactly 1 invocation
+6. **Public Ticker also retries** — verifies `_call_public` path through `get_price → get_pair → _call_public`
+
+Also fixed the old `test_get_balance_returns_zero_on_kraken_error` etc. tests — they mocked `EService:Unavailable` which is now in the transient set; switched them to `EAPI:Invalid key` so they pin "non-retryable error → returns default" without triggering retries.
+
+Full suite: 57 passed in 1.22s (51 prior + 6 new).
+
+**Surprised by:** Tenacity's `wait_exponential(min=1, max=10)` works perfectly in prod but makes test runs painfully slow if you don't override it. The `wait_none()` monkeypatch via `mocker.patch.object(kc._call_private.retry, "wait", wait_none())` was the cleanest pattern — applied per-test via a fixture so production behavior stays the configured exponential.
+
+**Next:** Day 19, rate limiter for Kraken calls — minimum 1 second between API calls, verified by a unit test.

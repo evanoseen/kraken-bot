@@ -1,12 +1,98 @@
+"""Thin wrapper around the krakenex REST client.
+
+Day 18 added `tenacity` retries with exponential backoff on every method
+that makes a network call. The two private helpers `_call_private` and
+`_call_public` are the only functions that actually touch the network;
+they are decorated with `@retry` so the public functions (get_balance,
+get_holdings, get_tradable_coins, get_pair, get_price, place_order) get
+retry behavior for free.
+
+What counts as "transient" and is retried:
+- HTTP-layer exceptions raised by krakenex (timeouts, 5xx responses)
+- Kraken-level rate-limit responses: `EAPI:Rate limit exceeded`
+- Kraken-level service-unavailable: `EService:Unavailable`, `EService:Busy`
+
+What is NOT retried:
+- Auth errors (`EAPI:Invalid key`) — these will not fix themselves
+- Validation errors (`EOrder:Invalid arguments`) — same
+- Successful responses (no `error` field)
+"""
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import krakenex
-import logging
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 from config import cfg
 
 logger = logging.getLogger(__name__)
+
+
+class KrakenTransientError(Exception):
+    """Raised when a Kraken response indicates a retryable transient failure.
+
+    Includes Kraken-side rate limits (HTTP 429 family — `EAPI:Rate limit`)
+    and service-unavailable responses (`EService:Unavailable`, `EService:Busy`).
+    The `tenacity` `@retry` decorator catches this type and re-invokes the
+    call up to `stop_after_attempt(3)` with exponential backoff.
+    """
+
+
+# A Kraken error string is "transient" if it contains any of these substrings.
+_TRANSIENT_PREFIXES: tuple[str, ...] = (
+    "EAPI:Rate limit",
+    "EService:Unavailable",
+    "EService:Busy",
+)
+
+
+def _is_transient(errors: list[str]) -> bool:
+    """Return True if any error string in `errors` is a transient Kraken failure."""
+    return any(
+        any(prefix in err for prefix in _TRANSIENT_PREFIXES)
+        for err in errors
+    )
+
+
+_retry_kraken = retry(
+    retry=retry_if_exception_type((KrakenTransientError, ConnectionError, TimeoutError)),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(min=1, max=10),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+
+
+@_retry_kraken
+def _call_private(client: krakenex.API, endpoint: str, payload: Optional[dict] = None) -> dict:
+    """Invoke a private Kraken REST endpoint with retry on transient errors.
+
+    Returns the full response dict (including any non-transient `error` list).
+    Raises `KrakenTransientError` on transient errors so `tenacity` retries.
+    """
+    resp = client.query_private(endpoint, payload) if payload else client.query_private(endpoint)
+    errors = resp.get("error") or []
+    if _is_transient(errors):
+        raise KrakenTransientError(f"transient Kraken error on private/{endpoint}: {errors}")
+    return resp
+
+
+@_retry_kraken
+def _call_public(client: krakenex.API, endpoint: str, payload: Optional[dict] = None) -> dict:
+    """Invoke a public Kraken REST endpoint with retry on transient errors."""
+    resp = client.query_public(endpoint, payload) if payload else client.query_public(endpoint)
+    errors = resp.get("error") or []
+    if _is_transient(errors):
+        raise KrakenTransientError(f"transient Kraken error on public/{endpoint}: {errors}")
+    return resp
 
 
 def get_client() -> krakenex.API:
@@ -27,8 +113,14 @@ def get_balance(client: krakenex.API) -> float:
     Args: `client` is a krakenex API instance from `get_client()`.
     Returns: float CAD (or USD) balance, or 0.0 on API error.
     Side effects: one private REST call to Kraken's `Balance` endpoint; logs errors.
+    Network calls are wrapped in `@retry` via `_call_private`.
     """
-    resp = client.query_private("Balance")
+    try:
+        resp = _call_private(client, "Balance")
+    except KrakenTransientError as e:
+        logger.error(f"Balance: retries exhausted: {e}")
+        return 0.0
+
     if resp.get("error"):
         logger.error(f"Balance error: {resp['error']}")
         return 0.0
@@ -38,11 +130,16 @@ def get_balance(client: krakenex.API) -> float:
 
 def get_holdings(client: krakenex.API) -> dict[str, float]:
     """Return dict of {symbol: amount} for coins currently held."""
-    resp = client.query_private("Balance")
+    try:
+        resp = _call_private(client, "Balance")
+    except KrakenTransientError as e:
+        logger.error(f"Holdings: retries exhausted: {e}")
+        return {}
+
     if resp.get("error"):
         return {}
     balances = resp.get("result", {})
-    holdings = {}
+    holdings: dict[str, float] = {}
     skip = {"ZCAD", "ZUSD", "ZEUR", "CAD", "USD", "EUR"}
     for key, val in balances.items():
         amount = float(val)
@@ -54,7 +151,12 @@ def get_holdings(client: krakenex.API) -> dict[str, float]:
 
 def get_tradable_coins(client: krakenex.API) -> list[str]:
     """Fetch all coins tradable in CAD or USD on Kraken."""
-    resp = client.query_public("AssetPairs")
+    try:
+        resp = _call_public(client, "AssetPairs")
+    except KrakenTransientError as e:
+        logger.error(f"AssetPairs: retries exhausted: {e}")
+        return []
+
     if resp.get("error"):
         logger.error(f"AssetPairs error: {resp['error']}")
         return []
@@ -64,7 +166,6 @@ def get_tradable_coins(client: krakenex.API) -> list[str]:
         quote = pair_info.get("quote", "")
         base = pair_info.get("base", "")
         if quote in ("ZCAD", "ZUSD", "CAD", "USD"):
-            # Clean up the base name
             clean = base.lstrip("X").lstrip("Z") if len(base) > 3 else base
             if clean not in ("CAD", "USD", "EUR", "GBP"):
                 coins.add(clean)
@@ -74,7 +175,12 @@ def get_tradable_coins(client: krakenex.API) -> list[str]:
 
 def get_pair(client: krakenex.API, coin: str) -> Optional[str]:
     """Find the best trading pair for a coin (prefer CAD, fallback USD)."""
-    resp = client.query_public("AssetPairs")
+    try:
+        resp = _call_public(client, "AssetPairs")
+    except KrakenTransientError as e:
+        logger.error(f"AssetPairs (get_pair): retries exhausted: {e}")
+        return None
+
     if resp.get("error"):
         return None
 
@@ -98,7 +204,11 @@ def get_price(client: krakenex.API, coin: str) -> float:
     pair = get_pair(client, coin)
     if not pair:
         return 0.0
-    resp = client.query_public("Ticker", {"pair": pair})
+    try:
+        resp = _call_public(client, "Ticker", {"pair": pair})
+    except KrakenTransientError as e:
+        logger.error(f"Ticker {pair}: retries exhausted: {e}")
+        return 0.0
     if resp.get("error"):
         return 0.0
     result = resp.get("result", {})
@@ -125,12 +235,16 @@ def place_order(
         logger.warning(f"Volume too small for {coin}")
         return None
 
-    resp = client.query_private("AddOrder", {
-        "pair": pair,
-        "type": action,
-        "ordertype": "market",
-        "volume": str(volume),
-    })
+    try:
+        resp = _call_private(client, "AddOrder", {
+            "pair": pair,
+            "type": action,
+            "ordertype": "market",
+            "volume": str(volume),
+        })
+    except KrakenTransientError as e:
+        logger.error(f"AddOrder {coin}: retries exhausted: {e}")
+        return None
 
     if resp.get("error"):
         logger.error(f"Order error for {coin}: {resp['error']}")
