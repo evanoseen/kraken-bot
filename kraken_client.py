@@ -20,6 +20,7 @@ What is NOT retried:
 from __future__ import annotations
 
 import logging
+import time
 from typing import Optional
 
 import krakenex
@@ -34,6 +35,33 @@ from tenacity import (
 from config import cfg
 
 logger = logging.getLogger(__name__)
+
+
+# ─── Rate limiter ─────────────────────────────────────────────────────────
+#
+# Kraken throttles per IP. The public-tier limit is ~1 call/second for
+# unauthenticated traffic and tighter on the authenticated tier. A
+# minimum-interval gate before every API call keeps us inside the budget
+# even when retries fire in quick succession.
+
+MIN_CALL_INTERVAL_SEC: float = 1.0
+
+_last_call_monotonic: float = 0.0
+
+
+def _rate_limit() -> None:
+    """Block until at least `MIN_CALL_INTERVAL_SEC` has passed since the last call.
+
+    Uses `time.monotonic()` so DST and NTP adjustments cannot wedge the
+    limiter. Updates the gate immediately after sleeping so concurrent
+    retries don't pile into the same window.
+    """
+    global _last_call_monotonic
+    now = time.monotonic()
+    elapsed = now - _last_call_monotonic
+    if 0.0 < elapsed < MIN_CALL_INTERVAL_SEC:
+        time.sleep(MIN_CALL_INTERVAL_SEC - elapsed)
+    _last_call_monotonic = time.monotonic()
 
 
 class KrakenTransientError(Exception):
@@ -73,11 +101,12 @@ _retry_kraken = retry(
 
 @_retry_kraken
 def _call_private(client: krakenex.API, endpoint: str, payload: Optional[dict] = None) -> dict:
-    """Invoke a private Kraken REST endpoint with retry on transient errors.
+    """Invoke a private Kraken REST endpoint with rate limit + retry on transient errors.
 
     Returns the full response dict (including any non-transient `error` list).
     Raises `KrakenTransientError` on transient errors so `tenacity` retries.
     """
+    _rate_limit()
     resp = client.query_private(endpoint, payload) if payload else client.query_private(endpoint)
     errors = resp.get("error") or []
     if _is_transient(errors):
@@ -87,7 +116,8 @@ def _call_private(client: krakenex.API, endpoint: str, payload: Optional[dict] =
 
 @_retry_kraken
 def _call_public(client: krakenex.API, endpoint: str, payload: Optional[dict] = None) -> dict:
-    """Invoke a public Kraken REST endpoint with retry on transient errors."""
+    """Invoke a public Kraken REST endpoint with rate limit + retry on transient errors."""
+    _rate_limit()
     resp = client.query_public(endpoint, payload) if payload else client.query_public(endpoint)
     errors = resp.get("error") or []
     if _is_transient(errors):

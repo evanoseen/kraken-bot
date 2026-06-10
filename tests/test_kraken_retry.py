@@ -27,11 +27,18 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 @pytest.fixture
 def fast_retry(mocker):
-    """Patch the retry decorator's wait strategy to zero so tests stay fast."""
+    """Patch retry wait + rate-limiter sleep to zero so tests stay fast.
+
+    Day 18 added tenacity exponential backoff between retries; Day 19 added
+    a `time.sleep` rate limiter inside _call_private/_call_public. Both are
+    neutralized here so retry/rate-limiter logic still runs but the test
+    finishes in milliseconds instead of seconds.
+    """
     import kraken_client
 
     mocker.patch.object(kraken_client._call_private.retry, "wait", wait_none())
     mocker.patch.object(kraken_client._call_public.retry, "wait", wait_none())
+    mocker.patch("kraken_client.time.sleep")
     return kraken_client
 
 

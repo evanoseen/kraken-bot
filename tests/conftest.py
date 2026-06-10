@@ -4,12 +4,30 @@ The `kraken_dryrun` fixture returns a `MagicMock` shaped like a `krakenex.API`
 instance with `query_private` and `query_public` methods preloaded with sane
 no-op responses. Individual tests can override any endpoint by reassigning
 `client.query_private.side_effect` or by stacking `mocker.patch` calls on top.
+
+`reset_kraken_rate_limiter` (autouse) keeps the Day 19 rate limiter from
+slowing tests that don't explicitly verify it. Each test starts with the
+limiter cold and `time.sleep` replaced with a no-op. Tests that want to
+observe the limiter's behavior (`tests/test_kraken_rate_limit.py`) install
+their own clock mocks on top.
 """
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def reset_kraken_rate_limiter(mocker):
+    """Cold-start the limiter and neutralize `time.sleep` for every test."""
+    try:
+        import kraken_client
+    except Exception:
+        return
+
+    kraken_client._last_call_monotonic = 0.0
+    mocker.patch("kraken_client.time.sleep")
 
 
 # ─── Canned Kraken responses ──────────────────────────────────────────────

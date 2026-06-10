@@ -256,3 +256,25 @@ Full suite: 57 passed in 1.22s (51 prior + 6 new).
 **Surprised by:** Tenacity's `wait_exponential(min=1, max=10)` works perfectly in prod but makes test runs painfully slow if you don't override it. The `wait_none()` monkeypatch via `mocker.patch.object(kc._call_private.retry, "wait", wait_none())` was the cleanest pattern — applied per-test via a fixture so production behavior stays the configured exponential.
 
 **Next:** Day 19, rate limiter for Kraken calls — minimum 1 second between API calls, verified by a unit test.
+
+---
+
+## Day 19, 2026-06-10
+
+**Shipped:** Manual `time.monotonic`-based rate limiter inside `kraken_client.py`. Added `MIN_CALL_INTERVAL_SEC = 1.0` module constant and a `_rate_limit()` function that uses `time.monotonic` (DST/NTP-safe) to enforce a minimum 1-second gap between calls. Wired into both `_call_private` and `_call_public` so every Kraken REST call passes through the limiter before hitting the network. The limiter sits *inside* the `@retry` helper so each retry attempt also honors the gap — no retry-storms during volatility.
+
+Contract locked with `tests/test_kraken_rate_limit.py` (6 tests):
+1. **Back-to-back calls sleep** — two calls 0.3s apart trigger `time.sleep` with delay ≈ 0.7s
+2. **Constant matches spec** — `MIN_CALL_INTERVAL_SEC == 1.0`
+3. **Elapsed interval skips sleep** — call 2.0s later does NOT sleep
+4. **Cold start doesn't sleep** — first call ever doesn't pause
+5. **`_call_private` invokes the limiter** — every private REST helper goes through `_rate_limit`
+6. **`_call_public` invokes the limiter** — every public REST helper too
+
+Added an autouse fixture `reset_kraken_rate_limiter` to `tests/conftest.py` that resets `_last_call_monotonic = 0.0` and patches `kraken_client.time.sleep` for every test. Without this, every test in `test_kraken_client.py` paid up to 1s of real sleep per call — the full suite went from 1.22s to 12.93s. With the autouse patch, back to 1.45s.
+
+Full suite: 63 passed (57 prior + 6 new).
+
+**Surprised by:** The rate-limit assertion `0.6 < delay <= 0.7` failed with `0.7000000000000028 <= 0.7` — float arithmetic precision. Loosened to `< 0.71` with a tiny epsilon. Standard pattern for testing floating-point bounds, easy to miss on first write.
+
+**Next:** Day 20, JSONL trade events — replace `trades.csv` with `trades.jsonl`, append one structured event per trade, gitignore the file.
