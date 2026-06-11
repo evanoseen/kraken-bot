@@ -5,3 +5,10 @@ __pycache__/
 venv/
 .venv/
 .pytest_cache/
+# Runtime state — never commit
+trades.jsonl
+trades.csv
+positions.json
+seen_listings.json
+last_run.txt
+latest_status.json

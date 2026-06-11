@@ -53,18 +53,66 @@ def get_position(coin: str) -> dict | None:
     return load_positions().get(coin)
 
 
-def log_trade(coin: str, action: str, price: float, amount_cad: float, pnl: Optional[float] = None) -> None:
-    """Append a trade to trades.csv."""
+TRADES_CSV = "trades.csv"
+TRADES_JSONL = "trades.jsonl"
+
+
+def log_trade(
+    coin: str,
+    action: str,
+    price: float,
+    amount_cad: float,
+    pnl: Optional[float] = None,
+    *,
+    pair: Optional[str] = None,
+    order_id: Optional[str] = None,
+) -> None:
+    """Append a trade event to both `trades.csv` (legacy) and `trades.jsonl` (Day 20 structured).
+
+    `action` is decomposed into `side` (`buy`/`sell`) and `signal_source`
+    (`newlisting`, `signal`, `stoploss`, `takeprofit`) so the JSONL is queryable
+    by either axis. `pair` and `order_id` are optional kwargs — callers that
+    have them should pass them through; trader.py's existing call sites pass
+    `None` and downstream JSONL queries will see `null`.
+    """
+    timestamp = datetime.utcnow().isoformat()
+
+    # Legacy CSV — keep writing so existing tooling (daily_pnl.py once Day 23
+    # lands, etc.) doesn't break.
     try:
-        write_header = not os.path.exists("trades.csv")
-        with open("trades.csv", "a") as f:
+        write_header = not os.path.exists(TRADES_CSV)
+        with open(TRADES_CSV, "a") as f:
             if write_header:
                 f.write("timestamp,coin,action,price,amount_cad,pnl_cad\n")
             pnl_str = f"{pnl:.2f}" if pnl is not None else ""
             f.write(
-                f"{datetime.utcnow().isoformat()},"
+                f"{timestamp},"
                 f"{coin},{action},{price:.8f},"
                 f"{amount_cad:.2f},{pnl_str}\n"
             )
     except Exception as e:
-        logger.error(f"Failed to log trade: {e}")
+        logger.error(f"Failed to log trade CSV: {e}")
+
+    # Day 20 structured JSONL — one JSON object per line, queryable with jq.
+    try:
+        if "_" in action:
+            side, signal_source = action.split("_", 1)
+        else:
+            side, signal_source = action, "unknown"
+        volume = round(amount_cad / price, 8) if price > 0 else 0.0
+        event = {
+            "timestamp": timestamp,
+            "coin": coin,
+            "pair": pair,
+            "side": side,
+            "signal_source": signal_source,
+            "volume": volume,
+            "price": price,
+            "amount_cad": amount_cad,
+            "pnl_cad": pnl,
+            "order_id": order_id,
+        }
+        with open(TRADES_JSONL, "a") as f:
+            f.write(json.dumps(event) + "\n")
+    except Exception as e:
+        logger.error(f"Failed to log trade JSONL: {e}")

@@ -278,3 +278,32 @@ Full suite: 63 passed (57 prior + 6 new).
 **Surprised by:** The rate-limit assertion `0.6 < delay <= 0.7` failed with `0.7000000000000028 <= 0.7` — float arithmetic precision. Loosened to `< 0.71` with a tiny epsilon. Standard pattern for testing floating-point bounds, easy to miss on first write.
 
 **Next:** Day 20, JSONL trade events — replace `trades.csv` with `trades.jsonl`, append one structured event per trade, gitignore the file.
+
+---
+
+## Day 20, 2026-06-11
+
+**Shipped:** Structured trade events as JSONL alongside the legacy CSV. `positions.log_trade` now appends one JSON object per trade to `trades.jsonl` with every field the backlog spec calls for — `timestamp`, `pair`, `side`, `volume`, `price`, `order_id`, `signal_source` — plus `coin`, `amount_cad`, `pnl_cad` for richer queries. The existing `trades.csv` keeps getting written so downstream tooling doesn't break (Day 23's `daily_pnl.py` will be the first new consumer of either format).
+
+Two key design choices:
+1. **Action decomposition.** Trader.py's existing calls pass `action` like `"buy_signal"`, `"sell_stoploss"`, `"buy_newlisting"`. `log_trade` splits this into `side` (`buy`/`sell`) and `signal_source` (`signal`/`stoploss`/`takeprofit`/`newlisting`). JSONL is now queryable on either axis without changing any caller.
+2. **`pair` and `order_id` as keyword-only kwargs with `None` defaults.** Current trader.py callers don't have either at hand — both default to `null` in the JSONL. Future days can plumb the Kraken txid through `place_order`'s return value and pass it here.
+
+`.gitignore` extended to exclude runtime state: `trades.jsonl`, `trades.csv`, `positions.json`, `seen_listings.json`, `last_run.txt`, `latest_status.json`. Six lines, one comment.
+
+Contract locked with `tests/test_log_trade_jsonl.py` (13 tests, all in `tmp_path` so writes never pollute the repo):
+1. Single call → one valid JSON line
+2. All 7 required backlog fields present + 3 extras
+3. Action decomposition parametrized over all 5 trader.py patterns (`buy_newlisting`, `buy_signal`, `sell_signal`, `sell_stoploss`, `sell_takeprofit`)
+4. Multiple calls → multiple valid lines
+5. Optional pair/order_id default to `null` (current trader.py path)
+6. Optional pair/order_id round-trip when passed (future path)
+7. CSV still written alongside (backward compat)
+8. **Done-when probe verbatim** — `python3 -c "import json; [json.loads(l) for l in open('trades.jsonl')]"` exits 0
+9. `.gitignore` excludes `trades.jsonl`
+
+Full suite: 76 passed (63 prior + 13 new) in 2.54s.
+
+**Surprised by:** The verbatim done-when probe uses `open('trades.jsonl')` which means the test had to be CWD-aware. `pytest`'s `tmp_path` + `monkeypatch.chdir(tmp_path)` is the clean pattern — every test writes to its own temp dir and the probe runs against that dir's file. Without that, parallel tests would collide on the repo's `trades.jsonl`.
+
+**Next:** Day 21, heartbeat file `last_run.txt` — write ISO timestamp at the end of every cycle so `stat -f %m` answers "is the bot alive?" without SSH.
