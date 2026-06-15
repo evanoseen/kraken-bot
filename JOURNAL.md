@@ -307,3 +307,25 @@ Full suite: 76 passed (63 prior + 13 new) in 2.54s.
 **Surprised by:** The verbatim done-when probe uses `open('trades.jsonl')` which means the test had to be CWD-aware. `pytest`'s `tmp_path` + `monkeypatch.chdir(tmp_path)` is the clean pattern — every test writes to its own temp dir and the probe runs against that dir's file. Without that, parallel tests would collide on the repo's `trades.jsonl`.
 
 **Next:** Day 21, heartbeat file `last_run.txt` — write ISO timestamp at the end of every cycle so `stat -f %m` answers "is the bot alive?" without SSH.
+
+---
+
+## Day 21, 2026-06-15
+
+**Shipped:** Heartbeat file so "is the bot alive?" is answerable without SSH. New `heartbeat.py` exposes `write_heartbeat()` (writes the current UTC ISO 8601 timestamp to `last_run.txt`, returns it) and `read_heartbeat()` (parses it back to a tz-aware `datetime`, or `None` when missing/empty — for ops scripts and the future Day 31 deploy health check). Default path is resolved relative to the module, not CWD, so it writes the right file no matter where the bot is launched from.
+
+**Key design choice — wrap, don't sprinkle.** `run_trading_cycle` has four exit paths (daily-loss-limit hit, insufficient balance, no signals, normal end). Rather than dropping a heartbeat write before every `return`, `main.py` now wraps the cycle in `run_cycle()` — call the trader, then stamp the heartbeat. One write site, and it survives any early-return path a future day adds to the trader. A raised exception intentionally skips the stamp: heartbeat means "a cycle completed," not "a cycle started."
+
+`last_run.txt` was already in `.gitignore` (added preemptively on Day 20 alongside the other runtime-state files), so the gitignore half of the done-condition was already satisfied — verified with `git check-ignore`.
+
+Contract locked with `tests/test_heartbeat.py` (4 tests, all in `tmp_path`):
+1. Write produces a parseable ISO 8601 timestamp, tz-aware not naive
+2. Write overwrites a stale previous stamp
+3. `read_heartbeat` on a missing file → `None`
+4. `read_heartbeat` on an empty/whitespace file → `None`
+
+End-to-end probe: `write_heartbeat()` wrote `2026-06-15T23:04:49.772299+00:00` and `read_heartbeat()` round-tripped it. Full suite: 80 passed (76 prior + 4 new) in 1.88s.
+
+**Surprised by:** The done-condition was already half-built. Day 20's gitignore sweep listed `last_run.txt` a day before the heartbeat existed — past-me front-ran the backlog. Worth noting the pattern: batching all runtime-state gitignore entries at once is cheap and removes a step from every later observability task.
+
+**Next:** Day 22, API latency logging — wrap each Kraken API method to time the call and `logger.info("kraken.<method> took %.2fs")`, so slow responses surface before they become an outage.
