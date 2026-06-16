@@ -7,6 +7,12 @@ they are decorated with `@retry` so the public functions (get_balance,
 get_holdings, get_tradable_coins, get_pair, get_price, place_order) get
 retry behavior for free.
 
+Day 22 added latency logging in the same two helpers: each times only the
+network call (excluding the rate-limit gate) and emits
+`kraken.<private|public>/<endpoint> took N.NNs` at INFO. Because every method
+routes through these helpers, every Kraken call logs its latency for free —
+slow responses surface in journalctl before they become an outage.
+
 What counts as "transient" and is retried:
 - HTTP-layer exceptions raised by krakenex (timeouts, 5xx responses)
 - Kraken-level rate-limit responses: `EAPI:Rate limit exceeded`
@@ -107,7 +113,9 @@ def _call_private(client: krakenex.API, endpoint: str, payload: Optional[dict] =
     Raises `KrakenTransientError` on transient errors so `tenacity` retries.
     """
     _rate_limit()
+    t0 = time.monotonic()
     resp = client.query_private(endpoint, payload) if payload else client.query_private(endpoint)
+    logger.info("kraken.private/%s took %.2fs", endpoint, time.monotonic() - t0)
     errors = resp.get("error") or []
     if _is_transient(errors):
         raise KrakenTransientError(f"transient Kraken error on private/{endpoint}: {errors}")
@@ -118,7 +126,9 @@ def _call_private(client: krakenex.API, endpoint: str, payload: Optional[dict] =
 def _call_public(client: krakenex.API, endpoint: str, payload: Optional[dict] = None) -> dict:
     """Invoke a public Kraken REST endpoint with rate limit + retry on transient errors."""
     _rate_limit()
+    t0 = time.monotonic()
     resp = client.query_public(endpoint, payload) if payload else client.query_public(endpoint)
+    logger.info("kraken.public/%s took %.2fs", endpoint, time.monotonic() - t0)
     errors = resp.get("error") or []
     if _is_transient(errors):
         raise KrakenTransientError(f"transient Kraken error on public/{endpoint}: {errors}")

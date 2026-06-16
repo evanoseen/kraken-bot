@@ -329,3 +329,23 @@ End-to-end probe: `write_heartbeat()` wrote `2026-06-15T23:04:49.772299+00:00` a
 **Surprised by:** The done-condition was already half-built. Day 20's gitignore sweep listed `last_run.txt` a day before the heartbeat existed — past-me front-ran the backlog. Worth noting the pattern: batching all runtime-state gitignore entries at once is cheap and removes a step from every later observability task.
 
 **Next:** Day 22, API latency logging — wrap each Kraken API method to time the call and `logger.info("kraken.<method> took %.2fs")`, so slow responses surface before they become an outage.
+
+---
+
+## Day 22, 2026-06-16
+
+**Shipped:** API latency logging on every Kraken call. Both network helpers — `_call_private` and `_call_public` — now bracket the actual `client.query_*` call with `time.monotonic()` and emit `kraken.<private|public>/<endpoint> took N.NNs` at INFO. Because the Day 18 retry refactor funnels *every* public function (get_balance, get_holdings, get_tradable_coins, get_pair, get_price, place_order) through these two helpers, every method gets per-call latency logging for free, tagged with the exact endpoint — better granularity than the backlog's "per method" framing, since `AssetPairs` and `Ticker` are now distinguishable in the logs.
+
+**Key design choice — time the network, not the gate.** The timer starts *after* `_rate_limit()`, so our own 1s throttle never pollutes the measured latency. The number in journalctl is real Kraken round-trip time, which is the whole point: a creeping `kraken.public/Ticker took 2.40s` is the early warning for an upcoming outage, and it'd be useless if it secretly included our rate-limit sleep.
+
+Contract locked with `tests/test_kraken_latency_logging.py` (4 tests):
+1. `_call_private` logs `kraken.private/Balance took N.NNs`
+2. `_call_public` logs `kraken.public/AssetPairs took N.NNs`
+3. The payload branch (`Ticker` with `{"pair": ...}`) is timed and logged
+4. Two calls produce two distinct latency lines — logged on *each* call, not once
+
+Full suite: 84 passed (80 prior + 4 new) in 1.34s.
+
+**Surprised by:** First cut of the test patched `kraken_client.time.monotonic` with a 2-value `side_effect` to assert an exact `0.25s`. It blew up with `StopIteration` — patching `kraken_client.time.monotonic` aliases the *global* `time.monotonic`, and tenacity's retry loop calls it too, draining the iterator. The fix was to stop faking the clock entirely: the mocked client returns instantly, so real `monotonic` gives a tiny well-formed elapsed, and asserting the log-line *shape* (`took \d+\.\d{2}s`) is both robust and a truer test. Lesson: don't mock a clock that a decorator on the same function also reads.
+
+**Next:** Day 23, daily PnL summary script — `scripts/daily_pnl.py` reads `trades.jsonl`, aggregates by day (buy/sell counts, net CAD flow), and fetches the live Kraken balance. First real consumer of Day 20's JSONL.
