@@ -349,3 +349,33 @@ Full suite: 84 passed (80 prior + 4 new) in 1.34s.
 **Surprised by:** First cut of the test patched `kraken_client.time.monotonic` with a 2-value `side_effect` to assert an exact `0.25s`. It blew up with `StopIteration` — patching `kraken_client.time.monotonic` aliases the *global* `time.monotonic`, and tenacity's retry loop calls it too, draining the iterator. The fix was to stop faking the clock entirely: the mocked client returns instantly, so real `monotonic` gives a tiny well-formed elapsed, and asserting the log-line *shape* (`took \d+\.\d{2}s`) is both robust and a truer test. Lesson: don't mock a clock that a decorator on the same function also reads.
 
 **Next:** Day 23, daily PnL summary script — `scripts/daily_pnl.py` reads `trades.jsonl`, aggregates by day (buy/sell counts, net CAD flow), and fetches the live Kraken balance. First real consumer of Day 20's JSONL.
+
+---
+
+## Day 23, 2026-06-18
+
+**Shipped:** `scripts/daily_pnl.py` — the first real consumer of Day 20's structured JSONL. It reads `trades.jsonl`, aggregates events by calendar day, and prints a fixed-width table of buy/sell counts, net CAD cash flow, and realized PnL per day, followed by a net realized-PnL line. With no flags it also fetches the live Kraken balance and appends a "Current Kraken balance" line.
+
+Sample output against synthetic data:
+```
+Day           Buys  Sells      Net CAD   Realized PnL
+-----------------------------------------------------
+2026-06-17       1      1       +12.00         +12.00
+2026-06-18       0      1       +25.00          -5.00
+
+Net realized PnL: +7.00 CAD
+```
+
+**Design choices:**
+1. **Network-free core, fail-soft edge.** Every aggregation function (`load_trades`, `aggregate_by_day`, `total_realized_pnl`, `format_table`, `build_report`) is pure and import-safe. Only `fetch_balance()` touches Kraken, and it imports the trading modules lazily inside a try/except — a missing `.env` or a network blip degrades to a stderr warning and "balance unavailable", not a crash. The trade table is still useful offline, which is exactly when you'd run this on a laptop away from the VPS.
+2. **`--no-balance` flag and `--file` override** make the script testable and scriptable without ever hitting the network.
+3. **`net_cad` is cash flow, `realized_pnl` is profit.** Net CAD = sell proceeds minus buy spend (where the money moved); realized PnL = sum of `pnl_cad`, which only sells carry. Keeping them as separate columns avoids conflating "cash that moved" with "money made" — a buy isn't a loss, it's a position.
+4. **Malformed lines are skipped, not fatal.** A single truncated JSONL write (power loss mid-append) shouldn't blind the whole report.
+
+Contract locked with `tests/test_daily_pnl.py` (8 tests): missing file → `[]`, blank/malformed lines skipped, per-day counts + cash flow + PnL, total realized PnL, report contains table + net-PnL line, balance line present only when provided, no-trades table renders, and `main(["--no-balance"])` runs offline and exits 0. Loaded the script by path via `importlib` since `scripts/` isn't a package.
+
+Full suite: 92 passed (84 prior + 8 new) in 1.87s.
+
+**Surprised by:** Nothing broke — the JSONL schema from Day 20 had every field this needed (`side`, `amount_cad`, `pnl_cad`, `timestamp`), so the consumer was a clean read with zero schema changes. That's the payoff of pinning the structured-log contract three days early.
+
+**Next:** Day 24, kill switch file — check for a `KILL` file at the top of each cycle; if present, log a warning and exit cleanly. First entry in the Features block.
