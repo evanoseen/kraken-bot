@@ -10,6 +10,7 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 - **Pump detector** — Identifies coins with 3x+ volume spikes vs. normal (early pump detection)
 - **New listing monitor** — Watches Kraken's blog RSS feed and buys coins the moment they list
 - **Risk management** — Daily loss limit, per-trade size caps, dry run mode
+- **Kill switch** — `touch KILL` in the repo root halts all trading instantly (next cycle becomes a no-op); `rm KILL` resumes — no restart, no SSH-to-systemctl
 - **24/7 operation** — Runs as a systemd service on a Linux VPS
 
 ## How It Works

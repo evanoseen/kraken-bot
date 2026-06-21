@@ -379,3 +379,23 @@ Full suite: 92 passed (84 prior + 8 new) in 1.87s.
 **Surprised by:** Nothing broke — the JSONL schema from Day 20 had every field this needed (`side`, `amount_cad`, `pnl_cad`, `timestamp`), so the consumer was a clean read with zero schema changes. That's the payoff of pinning the structured-log contract three days early.
 
 **Next:** Day 24, kill switch file — check for a `KILL` file at the top of each cycle; if present, log a warning and exit cleanly. First entry in the Features block.
+
+---
+
+## Day 24, 2026-06-21
+
+**Shipped:** Kill switch — the first entry in the Features block. New `kill_switch.py` exposes `kill_switch_active(path=KILL_FILE)`, a pure filesystem probe that returns True iff a `KILL` file exists in the repo root. `trader.run_trading_cycle()` checks it as its very first action: if active, it logs a warning and returns before building a Kraken client or making any network call. `touch KILL` halts all trading on the next cycle; `rm KILL` resumes on the cycle after — no SSH, no systemctl, no restart.
+
+**Key design choice — cycle-level halt, not process exit.** The backlog said "exit cleanly," but exiting the process would be a foot-gun under systemd: with `Restart=always` a killed process that exits would just be relaunched, hit the same `KILL` file, and exit again — a tight restart loop chewing CPU. Instead the switch makes each cycle a clean no-op while the process stays alive and keeps logging. That's strictly better for a "stop RIGHT NOW without SSH" tool: instant, reversible with one `rm`, logs stay flowing, and removing the file resumes trading automatically with zero restart. Documented this reasoning in OPS_RUNBOOK so future-me doesn't "fix" it into a process exit.
+
+**Checked before any network call.** The kill check sits above the OpenOrders query and the balance fetch, so a killed cycle is truly inert — it doesn't even touch Kraken. Verified by asserting `get_client` is never called when the switch is active.
+
+`KILL` added to `.gitignore` (runtime trigger, never shipped in a deploy). Documented in both required surfaces: README Features bullet, and OPS_RUNBOOK's "stop trading RIGHT NOW" section — where it's now the recommended fastest option, ahead of dry-run-flip and `systemctl stop`.
+
+Contract locked with `tests/test_kill_switch.py` (4 tests): probe False when absent / True when present; cycle halts + logs + never calls `get_client` when active; cycle proceeds to build a client when inactive (proven by a sentinel `RuntimeError` from a mocked `get_client`). End-to-end `touch KILL` / `rm KILL` walk confirmed the live behavior and cleaned up after itself.
+
+Full suite: 96 passed (92 prior + 4 new) in 1.95s.
+
+**Surprised by:** The done-when's literal "causes the bot to exit" pulled toward `sys.exit()`, but the systemd restart-loop reasoning flipped it to a cycle-skip. Worth flagging the pattern: a backlog written before the deploy model was firm can phrase a done-condition in a way that fights the runtime. The done-condition's *intent* — "kill trading instantly, resume by removing the file" — is fully met; its literal wording isn't, and that's the right call.
+
+**Next:** Day 25, CLI flags for `main.py` — `argparse` with `--once` (single cycle then exit) and `--dry-run` (force DRY_RUN regardless of env). Makes manual testing and one-shot runs first-class.

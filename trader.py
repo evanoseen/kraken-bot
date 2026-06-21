@@ -10,6 +10,7 @@ from market_matcher import analyze_news_for_trades
 from pump_detector import find_pumping_coins
 from listing_monitor import check_new_listings
 from config import cfg
+from kill_switch import kill_switch_active
 from positions import record_buy, remove_position, get_position, log_trade
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,12 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
 
 def run_trading_cycle() -> None:
     global _starting_balance
+
+    # Kill switch (Day 24): `touch KILL` halts trading instantly without SSH.
+    # Checked before any network call so a killed cycle does nothing at all.
+    if kill_switch_active():
+        logger.warning("KILL switch active — halting cycle, no trades will be placed. Remove the KILL file to resume.")
+        return
 
     logger.info("=" * 50)
     if cfg.dry_run:

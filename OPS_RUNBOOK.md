@@ -320,16 +320,25 @@ ssh root@204.168.204.221 'cd /root/kraken-bot && /root/kraken-bot/venv/bin/pytho
 ### Symptom: I want to stop trading RIGHT NOW
 
 ```bash
-# Fastest: flip dry-run on the server, restart
+# Fastest (no restart): drop the kill-switch file. The next cycle becomes a
+# no-op — no network calls, no orders — and logs a clear warning. Day 24.
+ssh root@204.168.204.221 'touch /root/kraken-bot/KILL'
+
+# Confirm it took effect (look for the warning on the next cycle)
+ssh root@204.168.204.221 'journalctl -u kraken-bot -n 20 --no-pager | grep "KILL switch"'
+
+# Resume trading — just remove the file. No restart needed; next cycle runs normally.
+ssh root@204.168.204.221 'rm -f /root/kraken-bot/KILL'
+
+# Alternative: flip dry-run on the server, restart (keeps cycles fully running)
 ssh root@204.168.204.221 'sed -i "s/^DRY_RUN=.*/DRY_RUN=true/" /root/kraken-bot/.env && systemctl restart kraken-bot'
-
-# Confirm
-ssh root@204.168.204.221 'grep DRY_RUN /root/kraken-bot/.env'
-# expected: DRY_RUN=true
-
 # Bot keeps running but does not place orders. Logs still flow so you can see what
 # it WOULD have done.
 ```
+
+The kill switch beats both dry-run and `systemctl stop`: it's instant, needs no
+restart, leaves the process and its logs alive, and reverses with a single `rm`.
+The `KILL` file is git-ignored so it never ships in a deploy.
 
 ### Symptom: I want to halt fully
 
