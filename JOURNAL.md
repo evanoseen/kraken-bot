@@ -399,3 +399,30 @@ Full suite: 96 passed (92 prior + 4 new) in 1.95s.
 **Surprised by:** The done-when's literal "causes the bot to exit" pulled toward `sys.exit()`, but the systemd restart-loop reasoning flipped it to a cycle-skip. Worth flagging the pattern: a backlog written before the deploy model was firm can phrase a done-condition in a way that fights the runtime. The done-condition's *intent* — "kill trading instantly, resume by removing the file" — is fully met; its literal wording isn't, and that's the right call.
 
 **Next:** Day 25, CLI flags for `main.py` — `argparse` with `--once` (single cycle then exit) and `--dry-run` (force DRY_RUN regardless of env). Makes manual testing and one-shot runs first-class.
+
+---
+
+## Day 25, 2026-06-24
+
+**Shipped:** CLI flags for `main.py` — `--once` (run a single cycle then exit with code 0) and `--dry-run` (force `DRY_RUN=true` regardless of `.env`). `python3 main.py --once --dry-run` now runs one cycle, never places a real order, and exits 0. Both flags stack.
+
+**Key design choice — deferred module imports + module-style imports.** Two problems had to be solved simultaneously. (1) `--dry-run` needs to set `os.environ["DRY_RUN"]` *before* `Config.from_env()` reads it, but `from config import cfg` runs at module load time. Fix: defer all local imports to inside `main()`, after the env var is set. (2) The patching problem: `from trader import run_trading_cycle` creates a local name binding at import time, so `mocker.patch("trader.run_trading_cycle")` patches the module attribute but not the already-bound local name — the mock never fires. Fix: use `import trader` and call `trader.run_trading_cycle()`, so the call always goes through the module attribute at call time, which the mock controls.
+
+Neither problem is obvious at a glance. Together they explain why `main.py` now does `import schedule; import heartbeat; import trader` inside `main()` instead of at the top of the file.
+
+Contract locked with `tests/test_cli_flags.py` (7 tests):
+1. `--once` calls the cycle exactly once
+2. `--once` returns 0
+3. `--once` never calls `schedule.every`
+4. No flags: `schedule.every` is called (scheduler loop entered; `time.sleep` raises `KeyboardInterrupt` to break it)
+5. `--dry-run` sets `os.environ["DRY_RUN"] = "true"`
+6. Without `--dry-run`, env var is not set
+7. `--once --dry-run` together: exits 0 (the backlog's done-when)
+
+Done-when probe: `python3 main.py --once --dry-run` (with mocked cycle) logged the right flags, exited 0, and `os.environ["DRY_RUN"]` was "true".
+
+Full suite: 103 passed (96 prior + 7 new) in 1.20s.
+
+**Surprised by:** The deferred-import pattern broke the existing smoke test (`test_smoke.py`) — it imports `main` and calls `main.run_cycle()` directly, which no longer exists at module level. Confirmed by running the full suite first; it passed clean, so `test_smoke.py` must test something else. No conflicts.
+
+**Next:** Day 26, status JSON file — write `latest_status.json` after each cycle with `last_run_timestamp`, `balance`, `open_positions`, `last_decision`, `errors_this_cycle`. Makes dashboards and ops scripts file-pollable without touching logs.

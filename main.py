@@ -1,36 +1,85 @@
-import schedule
-import time
+"""Entry point for the Kraken meme coin trading bot.
+
+CLI flags:
+  --once      Run one cycle then exit cleanly (skips the scheduler).
+              Good for manual runs, cron jobs, and testing.
+  --dry-run   Force DRY_RUN=true regardless of the .env value.
+              The bot never places a real order with this flag active.
+
+Local imports (trader, heartbeat, config) are deferred to inside main() so
+--dry-run can set os.environ["DRY_RUN"] before Config.from_env() reads it.
+Module-style imports (import trader) — not from-imports — are used so that
+mocker.patch("trader.run_trading_cycle") works correctly in tests.
+"""
+from __future__ import annotations
+
+import argparse
 import logging
-from trader import run_trading_cycle
-from heartbeat import write_heartbeat
-from config import cfg
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("bot.log"),
-    ]
-)
-logger = logging.getLogger(__name__)
+import os
+import time
+from typing import Optional
 
 
-def run_cycle() -> None:
-    """Run one trading cycle, then stamp the heartbeat file.
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="kraken-bot",
+        description="Kraken meme coin trading bot",
+    )
+    p.add_argument(
+        "--once",
+        action="store_true",
+        help="Run one cycle then exit (skips the scheduler)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Force DRY_RUN=true regardless of .env — never places real orders",
+    )
+    return p
 
-    Wrapping the cycle here guarantees the heartbeat is written on every
-    completed cycle regardless of which early-return path the trader takes.
-    """
-    run_trading_cycle()
-    write_heartbeat()
 
+def main(argv: Optional[list[str]] = None) -> int:
+    args = _build_parser().parse_args(argv)
 
-def main():
+    # Set before local imports so Config.from_env() picks it up.
+    if args.dry_run:
+        os.environ["DRY_RUN"] = "true"
+
+    # Deferred so --dry-run is in the environment before Config.from_env() runs.
+    # Module-style imports keep patching targets stable (mocker.patch works on
+    # module attributes, not on names already bound via `from x import y`).
+    import schedule
+    import heartbeat
+    import trader
+    from config import cfg
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler("bot.log"),
+        ],
+    )
+    logger = logging.getLogger(__name__)
+
+    if args.dry_run:
+        logger.info("--dry-run flag: forcing DRY_RUN=true, no real orders will be placed")
+    if args.once:
+        logger.info("--once flag: running a single cycle then exiting")
+
     logger.info("Kraken Meme Coin NewsTrader starting...")
     logger.info(f"Running every {cfg.run_interval_minutes} minutes")
 
+    def run_cycle() -> None:
+        trader.run_trading_cycle()
+        heartbeat.write_heartbeat()
+
     run_cycle()
+
+    if args.once:
+        logger.info("--once: single cycle complete, exiting with code 0")
+        return 0
 
     schedule.every(cfg.run_interval_minutes).minutes.do(run_cycle)
 
@@ -40,4 +89,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
