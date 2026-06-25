@@ -11,11 +11,13 @@ from pump_detector import find_pumping_coins
 from listing_monitor import check_new_listings
 from config import cfg
 from kill_switch import kill_switch_active
+from notifier import notify_trade
 from positions import record_buy, remove_position, get_position, log_trade
 
 logger = logging.getLogger(__name__)
 
 _starting_balance: Optional[float] = None
+_peak_balance: Optional[float] = None
 
 
 def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> None:
@@ -46,6 +48,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                 if result:
                     log_trade(coin, "sell_stoploss", price, current_value, pnl)
                     remove_position(coin)
+                    notify_trade("sell_stoploss", coin, current_value, price, pnl=pnl)
                     logger.info(f"Stop-loss executed for {coin}")
             else:
                 logger.info(f"[DRY RUN] Would stop-loss sell {coin} | P&L: ${pnl:.2f}")
@@ -61,13 +64,14 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                 if result:
                     log_trade(coin, "sell_takeprofit", price, current_value, pnl)
                     remove_position(coin)
+                    notify_trade("sell_takeprofit", coin, current_value, price, pnl=pnl)
                     logger.info(f"Take-profit executed for {coin} | Profit: +${pnl:.2f} CAD")
             else:
                 logger.info(f"[DRY RUN] Would take-profit sell {coin} | P&L: +${pnl:.2f}")
 
 
 def run_trading_cycle() -> None:
-    global _starting_balance
+    global _starting_balance, _peak_balance
 
     # Kill switch (Day 24): `touch KILL` halts trading instantly without SSH.
     # Checked before any network call so a killed cycle does nothing at all.
@@ -98,9 +102,20 @@ def run_trading_cycle() -> None:
         _starting_balance = balance
         logger.info(f"Starting balance: ${_starting_balance:.2f}")
 
+    _peak_balance = max(_peak_balance or balance, balance)
+
     daily_loss = _starting_balance - balance
     if daily_loss >= cfg.daily_loss_limit:
         logger.warning(f"Daily loss limit hit (${daily_loss:.2f} lost). Stopping for today.")
+        return
+
+    drawdown = (_peak_balance - balance) / _peak_balance if _peak_balance else 0.0
+    if drawdown >= cfg.max_drawdown_pct:
+        logger.warning(
+            f"Drawdown circuit breaker triggered: "
+            f"${balance:.2f} is {drawdown*100:.1f}% below peak ${_peak_balance:.2f}. "
+            f"Stopping for today."
+        )
         return
 
     if balance < 5:
@@ -172,6 +187,14 @@ def run_trading_cycle() -> None:
             logger.info(f"Skipping SELL {coin} — not held")
             continue
 
+        # Skip buys when at the position limit
+        if action == "buy" and len(holdings) >= cfg.max_open_positions:
+            logger.info(
+                f"Skipping BUY {coin} — at max open positions "
+                f"({cfg.max_open_positions}): {list(holdings.keys())}"
+            )
+            continue
+
         price = get_price(client, coin)
         if not price:
             logger.warning(f"Could not get price for {coin}")
@@ -192,6 +215,7 @@ def run_trading_cycle() -> None:
                 if action == "buy":
                     record_buy(coin, price, trade_amount)
                     log_trade(coin, "buy_signal", price, trade_amount)
+                    notify_trade("buy_signal", coin, trade_amount, price, confidence=confidence)
                 else:
                     position = get_position(coin)
                     pnl = None
@@ -200,6 +224,7 @@ def run_trading_cycle() -> None:
                         pnl = current_value - position["amount_cad"]
                         remove_position(coin)
                     log_trade(coin, "sell_signal", price, trade_amount, pnl)
+                    notify_trade("sell_signal", coin, trade_amount, price, confidence=confidence, pnl=pnl)
                 logger.info(f"Trade successful for {coin}!")
         else:
             logger.info(f"  [DRY RUN] Set DRY_RUN=false in .env to go live.")
