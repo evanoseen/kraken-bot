@@ -10,6 +10,7 @@ from market_matcher import analyze_news_for_trades
 from pump_detector import find_pumping_coins
 from listing_monitor import check_new_listings
 from config import cfg
+from cooldown import is_on_cooldown, mark_traded
 from kill_switch import kill_switch_active
 from notifier import notify_trade
 from positions import record_buy, remove_position, get_position, log_trade
@@ -49,6 +50,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                     log_trade(coin, "sell_stoploss", price, current_value, pnl)
                     remove_position(coin)
                     notify_trade("sell_stoploss", coin, current_value, price, pnl=pnl)
+                    mark_traded(coin)
                     logger.info(f"Stop-loss executed for {coin}")
             else:
                 logger.info(f"[DRY RUN] Would stop-loss sell {coin} | P&L: ${pnl:.2f}")
@@ -65,6 +67,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                     log_trade(coin, "sell_takeprofit", price, current_value, pnl)
                     remove_position(coin)
                     notify_trade("sell_takeprofit", coin, current_value, price, pnl=pnl)
+                    mark_traded(coin)
                     logger.info(f"Take-profit executed for {coin} | Profit: +${pnl:.2f} CAD")
             else:
                 logger.info(f"[DRY RUN] Would take-profit sell {coin} | P&L: +${pnl:.2f}")
@@ -187,6 +190,11 @@ def run_trading_cycle() -> None:
             logger.info(f"Skipping SELL {coin} — not held")
             continue
 
+        # Skip coins still within the post-trade cooldown window
+        if is_on_cooldown(coin, cfg.trade_cooldown_minutes):
+            logger.info(f"Skipping {action.upper()} {coin} — cooldown active ({cfg.trade_cooldown_minutes:.0f}m)")
+            continue
+
         # Skip buys when at the position limit
         if action == "buy" and len(holdings) >= cfg.max_open_positions:
             logger.info(
@@ -216,6 +224,7 @@ def run_trading_cycle() -> None:
                     record_buy(coin, price, trade_amount)
                     log_trade(coin, "buy_signal", price, trade_amount)
                     notify_trade("buy_signal", coin, trade_amount, price, confidence=confidence)
+                    mark_traded(coin)
                 else:
                     position = get_position(coin)
                     pnl = None
@@ -225,6 +234,7 @@ def run_trading_cycle() -> None:
                         remove_position(coin)
                     log_trade(coin, "sell_signal", price, trade_amount, pnl)
                     notify_trade("sell_signal", coin, trade_amount, price, confidence=confidence, pnl=pnl)
+                    mark_traded(coin)
                 logger.info(f"Trade successful for {coin}!")
         else:
             logger.info(f"  [DRY RUN] Set DRY_RUN=false in .env to go live.")
