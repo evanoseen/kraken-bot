@@ -50,6 +50,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # module attributes, not on names already bound via `from x import y`).
     import schedule
     import heartbeat
+    import health
     import trader
     from config import cfg
 
@@ -69,7 +70,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.info("--once flag: running a single cycle then exiting")
 
     logger.info("Kraken Meme Coin NewsTrader starting...")
-    logger.info(f"Running every {cfg.run_interval_minutes} minutes")
+    health.run_checks(cfg)
 
     def run_cycle() -> None:
         trader.run_trading_cycle()
