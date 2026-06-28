@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 import krakenex
@@ -37,6 +38,30 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
         pct_change = (price - entry_price) / entry_price
         current_value = amount * price
         pnl = current_value - amount_cad
+
+        # Stale position exit (Day 31)
+        timestamp = position.get("timestamp")
+        if timestamp:
+            try:
+                entered_at = datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc)
+                age_hours = (datetime.now(timezone.utc) - entered_at).total_seconds() / 3600
+                if age_hours >= cfg.max_position_age_hours:
+                    logger.warning(
+                        f"STALE POSITION: {coin} held {age_hours:.1f}h "
+                        f"(limit {cfg.max_position_age_hours:.0f}h) | P&L: ${pnl:.2f} CAD — force selling"
+                    )
+                    if not cfg.dry_run:
+                        result = place_order(client, coin, "sell", current_value, price)
+                        if result:
+                            log_trade(coin, "sell_stale", price, current_value, pnl)
+                            remove_position(coin)
+                            notify_trade("sell_stale", coin, current_value, price, pnl=pnl)
+                            mark_traded(coin)
+                    else:
+                        logger.info(f"[DRY RUN] Would force-sell stale {coin} | P&L: ${pnl:.2f}")
+                    continue
+            except ValueError:
+                pass
 
         if pct_change <= -cfg.stop_loss_pct:
             logger.warning(

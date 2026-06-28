@@ -50,6 +50,7 @@ class Config:
     # Exit thresholds
     stop_loss_pct: float
     take_profit_pct: float
+    max_position_age_hours: float
 
     # Cadence
     run_interval_minutes: int
@@ -75,6 +76,7 @@ class Config:
             max_open_positions=int(os.getenv("MAX_OPEN_POSITIONS", "3")),
             stop_loss_pct=float(os.getenv("STOP_LOSS_PCT", "0.10")),
             take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.25")),
+            max_position_age_hours=float(os.getenv("MAX_POSITION_AGE_HOURS", "24")),
             run_interval_minutes=int(os.getenv("RUN_INTERVAL_MINUTES", "15")),
             trade_cooldown_minutes=float(os.getenv("TRADE_COOLDOWN_MINUTES", "60")),
             dry_run=os.getenv("DRY_RUN", "true").lower() == "true",
