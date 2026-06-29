@@ -12,6 +12,7 @@ from pump_detector import find_pumping_coins
 from listing_monitor import check_new_listings
 from config import cfg
 from cooldown import is_on_cooldown, mark_traded
+from signals import deduplicate
 from kill_switch import kill_switch_active
 from notifier import notify_trade
 from positions import record_buy, remove_position, get_position, log_trade
@@ -195,9 +196,15 @@ def run_trading_cycle() -> None:
     logger.info(f"Fetched {len(articles)} headlines")
     news_signals = analyze_news_for_trades(headlines, available_coins)
 
-    # Combine both signal sources
-    signals = pump_signals + news_signals
-    logger.info(f"Found {len(signals)} total signal(s) ({len(pump_signals)} pump + {len(news_signals)} news)")
+    # Combine and deduplicate — same coin from pump + news becomes one trade
+    raw_signals = pump_signals + news_signals
+    signals = deduplicate(raw_signals)
+    dupes = len(raw_signals) - len(signals)
+    logger.info(
+        f"Found {len(signals)} signal(s) after dedup "
+        f"({len(pump_signals)} pump + {len(news_signals)} news"
+        + (f", {dupes} merged)" if dupes else ")")
+    )
 
     if not signals:
         logger.info("No confident signals. No trades placed.")
