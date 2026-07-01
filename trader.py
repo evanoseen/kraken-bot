@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _starting_balance: Optional[float] = None
 _peak_balance: Optional[float] = None
+_trades_today: int = 0
 
 
 def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> None:
@@ -100,7 +101,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
 
 
 def run_trading_cycle() -> None:
-    global _starting_balance, _peak_balance
+    global _starting_balance, _peak_balance, _trades_today
 
     # Kill switch (Day 24): `touch KILL` halts trading instantly without SSH.
     # Checked before any network call so a killed cycle does nothing at all.
@@ -144,6 +145,13 @@ def run_trading_cycle() -> None:
             f"Drawdown circuit breaker triggered: "
             f"${balance:.2f} is {drawdown*100:.1f}% below peak ${_peak_balance:.2f}. "
             f"Stopping for today."
+        )
+        return
+
+    if _trades_today >= cfg.max_trades_per_day:
+        logger.warning(
+            f"Daily trade cap reached ({_trades_today}/{cfg.max_trades_per_day}). "
+            f"No new trades until restart."
         )
         return
 
@@ -267,7 +275,8 @@ def run_trading_cycle() -> None:
                     log_trade(coin, "sell_signal", price, trade_amount, pnl)
                     notify_trade("sell_signal", coin, trade_amount, price, confidence=confidence, pnl=pnl)
                     mark_traded(coin)
-                logger.info(f"Trade successful for {coin}!")
+                _trades_today += 1
+                logger.info(f"Trade successful for {coin}! ({_trades_today}/{cfg.max_trades_per_day} today)")
         else:
             logger.info(f"  [DRY RUN] Set DRY_RUN=false in .env to go live.")
 

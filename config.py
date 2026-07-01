@@ -46,6 +46,7 @@ class Config:
     daily_loss_limit: float
     max_drawdown_pct: float
     max_open_positions: int
+    max_trades_per_day: int
 
     # Exit thresholds
     stop_loss_pct: float
@@ -74,6 +75,7 @@ class Config:
             daily_loss_limit=float(os.getenv("DAILY_LOSS_LIMIT", "50.0")),
             max_drawdown_pct=float(os.getenv("MAX_DRAWDOWN_PCT", "0.20")),
             max_open_positions=int(os.getenv("MAX_OPEN_POSITIONS", "3")),
+            max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "10")),
             stop_loss_pct=float(os.getenv("STOP_LOSS_PCT", "0.10")),
             take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.25")),
             max_position_age_hours=float(os.getenv("MAX_POSITION_AGE_HOURS", "24")),
