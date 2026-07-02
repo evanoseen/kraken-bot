@@ -22,10 +22,13 @@ logger = logging.getLogger(__name__)
 _starting_balance: Optional[float] = None
 _peak_balance: Optional[float] = None
 _trades_today: int = 0
+_wins: int = 0
+_losses: int = 0
 
 
 def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> None:
     """Check all held coins for stop-loss or take-profit triggers."""
+    global _wins, _losses
     for coin, amount in holdings.items():
         position = get_position(coin)
         if not position:
@@ -59,6 +62,10 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                             remove_position(coin)
                             notify_trade("sell_stale", coin, current_value, price, pnl=pnl)
                             mark_traded(coin)
+                            if pnl >= 0:
+                                _wins += 1
+                            else:
+                                _losses += 1
                     else:
                         logger.info(f"[DRY RUN] Would force-sell stale {coin} | P&L: ${pnl:.2f}")
                     continue
@@ -78,6 +85,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                     remove_position(coin)
                     notify_trade("sell_stoploss", coin, current_value, price, pnl=pnl)
                     mark_traded(coin)
+                    _losses += 1
                     logger.info(f"Stop-loss executed for {coin}")
             else:
                 logger.info(f"[DRY RUN] Would stop-loss sell {coin} | P&L: ${pnl:.2f}")
@@ -95,13 +103,14 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                     remove_position(coin)
                     notify_trade("sell_takeprofit", coin, current_value, price, pnl=pnl)
                     mark_traded(coin)
+                    _wins += 1
                     logger.info(f"Take-profit executed for {coin} | Profit: +${pnl:.2f} CAD")
             else:
                 logger.info(f"[DRY RUN] Would take-profit sell {coin} | P&L: +${pnl:.2f}")
 
 
 def run_trading_cycle() -> None:
-    global _starting_balance, _peak_balance, _trades_today
+    global _starting_balance, _peak_balance, _trades_today, _wins, _losses
 
     # Kill switch (Day 24): `touch KILL` halts trading instantly without SSH.
     # Checked before any network call so a killed cycle does nothing at all.
@@ -113,6 +122,10 @@ def run_trading_cycle() -> None:
     if cfg.dry_run:
         logger.info("DRY RUN MODE — no real orders will be placed")
     logger.info("Starting trading cycle...")
+    total_closed = _wins + _losses
+    if total_closed:
+        win_rate = _wins / total_closed * 100
+        logger.info(f"Session W/L: {_wins}W/{_losses}L ({win_rate:.0f}%)")
 
     client = get_client()
 
@@ -275,6 +288,11 @@ def run_trading_cycle() -> None:
                     log_trade(coin, "sell_signal", price, trade_amount, pnl)
                     notify_trade("sell_signal", coin, trade_amount, price, confidence=confidence, pnl=pnl)
                     mark_traded(coin)
+                    if pnl is not None:
+                        if pnl >= 0:
+                            _wins += 1
+                        else:
+                            _losses += 1
                 _trades_today += 1
                 logger.info(f"Trade successful for {coin}! ({_trades_today}/{cfg.max_trades_per_day} today)")
         else:
