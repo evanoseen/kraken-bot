@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import signal
 import time
 from typing import Optional
 
@@ -71,6 +72,24 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     logger.info("Kraken Meme Coin NewsTrader starting...")
     health.run_checks(cfg)
+
+    def _shutdown(signum: int, _frame: object) -> None:
+        sig_name = signal.Signals(signum).name
+        logger.info(f"Received {sig_name} — shutting down gracefully...")
+        w, l = trader._wins, trader._losses
+        total = w + l
+        win_rate = f"{w / total * 100:.0f}%" if total else "n/a"
+        logger.info(
+            f"Session summary: {trader._trades_today} trade(s) | "
+            f"W/L {w}/{l} ({win_rate}) | "
+            f"started at ${trader._starting_balance:.2f} CAD"
+            if trader._starting_balance else
+            f"Session summary: {trader._trades_today} trade(s) | W/L {w}/{l} ({win_rate})"
+        )
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGINT, _shutdown)
+    signal.signal(signal.SIGTERM, _shutdown)
 
     def run_cycle() -> None:
         trader.run_trading_cycle()
