@@ -39,6 +39,7 @@ class Config:
     anthropic_api_key: Optional[str]
     telegram_bot_token: Optional[str]
     telegram_chat_id: Optional[str]
+    balance_alert_threshold: Optional[float]
 
     # Risk caps
     max_trade_amount: float
@@ -70,6 +71,7 @@ class Config:
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+            balance_alert_threshold=float(os.getenv("BALANCE_ALERT_THRESHOLD")) if os.getenv("BALANCE_ALERT_THRESHOLD") else None,
             max_trade_amount=float(os.getenv("MAX_TRADE_AMOUNT", "25.0")),
             min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.80")),
             daily_loss_limit=float(os.getenv("DAILY_LOSS_LIMIT", "50.0")),

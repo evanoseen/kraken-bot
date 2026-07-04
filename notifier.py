@@ -52,6 +52,8 @@ def _build_message(
         "sell_signal": "SELL",
         "sell_stoploss": "STOP-LOSS",
         "sell_takeprofit": "TAKE-PROFIT",
+        "sell_stale": "STALE EXIT",
+        "balance_alert": "LOW BALANCE WARNING",
     }
     label = icons.get(action, action.upper())
     prefix = "[DRY RUN] " if dry_run else ""

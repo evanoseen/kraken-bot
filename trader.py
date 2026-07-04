@@ -24,6 +24,7 @@ _peak_balance: Optional[float] = None
 _trades_today: int = 0
 _wins: int = 0
 _losses: int = 0
+_balance_alert_sent: bool = False
 
 
 def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> None:
@@ -110,7 +111,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
 
 
 def run_trading_cycle() -> None:
-    global _starting_balance, _peak_balance, _trades_today, _wins, _losses
+    global _starting_balance, _peak_balance, _trades_today, _wins, _losses, _balance_alert_sent
 
     # Kill switch (Day 24): `touch KILL` halts trading instantly without SSH.
     # Checked before any network call so a killed cycle does nothing at all.
@@ -167,6 +168,11 @@ def run_trading_cycle() -> None:
             f"No new trades until restart."
         )
         return
+
+    if cfg.balance_alert_threshold and balance < cfg.balance_alert_threshold and not _balance_alert_sent:
+        logger.warning(f"LOW BALANCE: ${balance:.2f} CAD is below alert threshold ${cfg.balance_alert_threshold:.2f}")
+        notify_trade("balance_alert", "WALLET", balance, 1.0)
+        _balance_alert_sent = True
 
     if balance < 5:
         logger.warning("Insufficient balance. Skipping.")
