@@ -16,6 +16,7 @@ from signals import deduplicate
 from kill_switch import kill_switch_active
 from notifier import notify_trade
 from positions import record_buy, remove_position, get_position, log_trade
+from blacklist import is_blacklisted
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,11 @@ def run_trading_cycle() -> None:
         # Skip sells on coins we don't hold
         if action == "sell" and coin not in holdings:
             logger.info(f"Skipping SELL {coin} — not held")
+            continue
+
+        # Skip blacklisted coins (Day 39)
+        if is_blacklisted(coin):
+            logger.info(f"Skipping {action.upper()} {coin} — blacklisted")
             continue
 
         # Skip coins still within the post-trade cooldown window
