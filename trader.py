@@ -154,6 +154,15 @@ def run_trading_cycle() -> None:
         logger.warning(f"Daily loss limit hit (${daily_loss:.2f} lost). Stopping for today.")
         return
 
+    # Profit target halt (Day 40): lock in gains once session profit hits the target.
+    session_profit = balance - _starting_balance
+    if cfg.profit_target and session_profit >= cfg.profit_target:
+        logger.info(
+            f"PROFIT TARGET reached: +${session_profit:.2f} CAD this session "
+            f"(target ${cfg.profit_target:.2f}). Halting to lock in gains."
+        )
+        return
+
     drawdown = (_peak_balance - balance) / _peak_balance if _peak_balance else 0.0
     if drawdown >= cfg.max_drawdown_pct:
         logger.warning(
