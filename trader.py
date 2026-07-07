@@ -17,6 +17,7 @@ from kill_switch import kill_switch_active
 from notifier import notify_trade
 from positions import record_buy, remove_position, get_position, log_trade
 from blacklist import is_blacklisted
+from coin_trade_counter import at_cap as coin_at_cap, increment as coin_increment
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +265,14 @@ def run_trading_cycle() -> None:
             logger.info(f"Skipping {action.upper()} {coin} — blacklisted")
             continue
 
+        # Skip coins that hit the per-coin trade cap (Day 41)
+        if coin_at_cap(coin, cfg.max_trades_per_coin):
+            logger.info(
+                f"Skipping {action.upper()} {coin} — per-coin cap reached "
+                f"({cfg.max_trades_per_coin} trades this session)"
+            )
+            continue
+
         # Skip coins still within the post-trade cooldown window
         if is_on_cooldown(coin, cfg.trade_cooldown_minutes):
             logger.info(f"Skipping {action.upper()} {coin} — cooldown active ({cfg.trade_cooldown_minutes:.0f}m)")
@@ -315,6 +324,7 @@ def run_trading_cycle() -> None:
                         else:
                             _losses += 1
                 _trades_today += 1
+                coin_increment(coin)
                 logger.info(f"Trade successful for {coin}! ({_trades_today}/{cfg.max_trades_per_day} today)")
         else:
             logger.info(f"  [DRY RUN] Set DRY_RUN=false in .env to go live.")

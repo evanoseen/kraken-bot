@@ -41,6 +41,7 @@ class Config:
     telegram_chat_id: Optional[str]
     balance_alert_threshold: Optional[float]
     profit_target: Optional[float]
+    max_trades_per_coin: Optional[int]
 
     # Risk caps
     max_trade_amount: float
@@ -74,6 +75,7 @@ class Config:
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
             balance_alert_threshold=float(os.getenv("BALANCE_ALERT_THRESHOLD")) if os.getenv("BALANCE_ALERT_THRESHOLD") else None,
             profit_target=float(os.getenv("PROFIT_TARGET")) if os.getenv("PROFIT_TARGET") else None,
+            max_trades_per_coin=int(os.getenv("MAX_TRADES_PER_COIN")) if os.getenv("MAX_TRADES_PER_COIN") else None,
             max_trade_amount=float(os.getenv("MAX_TRADE_AMOUNT", "25.0")),
             min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.80")),
             daily_loss_limit=float(os.getenv("DAILY_LOSS_LIMIT", "50.0")),
