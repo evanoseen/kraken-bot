@@ -18,6 +18,7 @@ from notifier import notify_trade
 from positions import record_buy, remove_position, get_position, log_trade
 from blacklist import is_blacklisted
 from coin_trade_counter import at_cap as coin_at_cap, increment as coin_increment
+from trade_logger import append_trade as csv_log
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                         result = place_order(client, coin, "sell", current_value, price)
                         if result:
                             log_trade(coin, "sell_stale", price, current_value, pnl)
+                            csv_log(coin, "sell_stale", current_value, price, pnl=pnl)
                             remove_position(coin)
                             notify_trade("sell_stale", coin, current_value, price, pnl=pnl)
                             mark_traded(coin)
@@ -85,6 +87,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                 result = place_order(client, coin, "sell", current_value, price)
                 if result:
                     log_trade(coin, "sell_stoploss", price, current_value, pnl)
+                    csv_log(coin, "sell_stoploss", current_value, price, pnl=pnl)
                     remove_position(coin)
                     notify_trade("sell_stoploss", coin, current_value, price, pnl=pnl)
                     mark_traded(coin)
@@ -103,6 +106,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                 result = place_order(client, coin, "sell", current_value, price)
                 if result:
                     log_trade(coin, "sell_takeprofit", price, current_value, pnl)
+                    csv_log(coin, "sell_takeprofit", current_value, price, pnl=pnl)
                     remove_position(coin)
                     notify_trade("sell_takeprofit", coin, current_value, price, pnl=pnl)
                     mark_traded(coin)
@@ -306,6 +310,7 @@ def run_trading_cycle() -> None:
                 if action == "buy":
                     record_buy(coin, price, trade_amount)
                     log_trade(coin, "buy_signal", price, trade_amount)
+                    csv_log(coin, "buy_signal", trade_amount, price, confidence=confidence)
                     notify_trade("buy_signal", coin, trade_amount, price, confidence=confidence)
                     mark_traded(coin)
                 else:
@@ -316,6 +321,7 @@ def run_trading_cycle() -> None:
                         pnl = current_value - position["amount_cad"]
                         remove_position(coin)
                     log_trade(coin, "sell_signal", price, trade_amount, pnl)
+                    csv_log(coin, "sell_signal", trade_amount, price, confidence=confidence, pnl=pnl)
                     notify_trade("sell_signal", coin, trade_amount, price, confidence=confidence, pnl=pnl)
                     mark_traded(coin)
                     if pnl is not None:
