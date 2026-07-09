@@ -193,6 +193,16 @@ def run_trading_cycle() -> None:
         logger.warning("Insufficient balance. Skipping.")
         return
 
+    # Balance reserve guard (Day 43): funds above the reserve are the only
+    # funds available to trade. Stop if tradeable funds are too low.
+    available = balance - cfg.min_balance_reserve
+    if available < 5:
+        logger.warning(
+            f"Available balance ${available:.2f} CAD (after ${cfg.min_balance_reserve:.2f} reserve) "
+            f"is below minimum. Skipping."
+        )
+        return
+
     # Get all tradable coins + current holdings
     available_coins = get_tradable_coins(client)
     holdings = get_holdings(client)
@@ -295,7 +305,7 @@ def run_trading_cycle() -> None:
             logger.warning(f"Could not get price for {coin}")
             continue
 
-        trade_amount = min(cfg.max_trade_amount * confidence, balance * 0.25)
+        trade_amount = min(cfg.max_trade_amount * confidence, available * 0.25)
 
         logger.info(
             f"{'[DRY RUN] ' if cfg.dry_run else ''}Signal: {action.upper()} "
