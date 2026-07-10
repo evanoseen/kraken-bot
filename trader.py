@@ -77,6 +77,21 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
             except ValueError:
                 pass
 
+        # Minimum hold time guard (Day 44): skip stop-loss/take-profit until
+        # the position has been held long enough. Stale exits bypass this.
+        if cfg.min_hold_minutes > 0 and timestamp:
+            try:
+                entered_at = datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc)
+                age_minutes = (datetime.now(timezone.utc) - entered_at).total_seconds() / 60
+                if age_minutes < cfg.min_hold_minutes:
+                    logger.info(
+                        f"Skipping exit for {coin} — held {age_minutes:.1f}m "
+                        f"(min {cfg.min_hold_minutes:.0f}m)"
+                    )
+                    continue
+            except ValueError:
+                pass
+
         if pct_change <= -cfg.stop_loss_pct:
             logger.warning(
                 f"STOP-LOSS triggered: {coin} | "
