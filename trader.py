@@ -19,6 +19,7 @@ from positions import record_buy, remove_position, get_position, log_trade
 from blacklist import is_blacklisted
 from coin_trade_counter import at_cap as coin_at_cap, increment as coin_increment
 from trade_logger import append_trade as csv_log
+from status import write_status
 
 logger = logging.getLogger(__name__)
 
@@ -362,3 +363,13 @@ def run_trading_cycle() -> None:
 
     logger.info("Trading cycle complete.")
     logger.info("=" * 50)
+
+    holdings_now = get_holdings(client)
+    write_status(
+        balance=balance,
+        open_positions=len(holdings_now),
+        trades_today=_trades_today,
+        wins=_wins,
+        losses=_losses,
+        starting_balance=_starting_balance,
+    )
