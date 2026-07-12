@@ -323,6 +323,14 @@ def run_trading_cycle() -> None:
 
         trade_amount = min(cfg.max_trade_amount * confidence, available * 0.25)
 
+        # Trade size floor (Day 46): skip orders too small for the exchange to accept.
+        if trade_amount < cfg.min_trade_amount:
+            logger.info(
+                f"Skipping {action.upper()} {coin} — trade size ${trade_amount:.2f} "
+                f"is below minimum ${cfg.min_trade_amount:.2f}"
+            )
+            continue
+
         logger.info(
             f"{'[DRY RUN] ' if cfg.dry_run else ''}Signal: {action.upper()} "
             f"${trade_amount:.2f} of {coin} @ ${price:.8f} "
