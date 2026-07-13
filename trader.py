@@ -20,6 +20,7 @@ from blacklist import is_blacklisted
 from coin_trade_counter import at_cap as coin_at_cap, increment as coin_increment
 from trade_logger import append_trade as csv_log
 from status import write_status
+from headline_cache import filter_new as filter_new_headlines, mark_seen as mark_headlines_seen
 
 logger = logging.getLogger(__name__)
 
@@ -258,11 +259,17 @@ def run_trading_cycle() -> None:
             ),
         })
 
-    # Fetch news signals
+    # Fetch news signals — skip Claude if all headlines already analyzed (Day 47)
     articles = fetch_top_headlines()
-    headlines = format_headlines_for_prompt(articles)
-    logger.info(f"Fetched {len(articles)} headlines")
-    news_signals = analyze_news_for_trades(headlines, available_coins)
+    new_articles = filter_new_headlines(articles)
+    logger.info(f"Fetched {len(articles)} headlines ({len(new_articles)} new)")
+    if not new_articles:
+        logger.info("All headlines seen this session — skipping Claude analysis.")
+        news_signals = []
+    else:
+        mark_headlines_seen(new_articles)
+        headlines = format_headlines_for_prompt(new_articles)
+        news_signals = analyze_news_for_trades(headlines, available_coins)
 
     # Combine and deduplicate — same coin from pump + news becomes one trade
     raw_signals = pump_signals + news_signals
