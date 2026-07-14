@@ -21,6 +21,7 @@ from coin_trade_counter import at_cap as coin_at_cap, increment as coin_incremen
 from trade_logger import append_trade as csv_log
 from status import write_status
 from headline_cache import filter_new as filter_new_headlines, mark_seen as mark_headlines_seen
+from retry import with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ def run_trading_cycle() -> None:
             for txid in orders:
                 client.query_private("CancelOrder", {"txid": txid})
 
-    balance = get_balance(client)
+    balance = with_retry(get_balance, client, max_attempts=3, base_delay=1.0)
     logger.info(f"Balance: ${balance:.2f} CAD")
 
     if _starting_balance is None:
