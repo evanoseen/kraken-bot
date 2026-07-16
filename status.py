@@ -35,11 +35,13 @@ def write_status(
     wins: int,
     losses: int,
     starting_balance: Optional[float] = None,
+    portfolio_value: Optional[float] = None,
 ) -> None:
     total = wins + losses
     payload = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "balance_cad": round(balance, 4),
+        "portfolio_value_cad": round(portfolio_value, 4) if portfolio_value is not None else None,
         "starting_balance_cad": round(starting_balance, 4) if starting_balance is not None else None,
         "session_pnl_cad": round(balance - starting_balance, 4) if starting_balance is not None else None,
         "open_positions": open_positions,

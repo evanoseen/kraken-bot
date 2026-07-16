@@ -22,6 +22,7 @@ from trade_logger import append_trade as csv_log
 from status import write_status
 from headline_cache import filter_new as filter_new_headlines, mark_seen as mark_headlines_seen
 from retry import with_retry
+from portfolio import compute_value as portfolio_value
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,11 @@ def run_trading_cycle() -> None:
     holdings = get_holdings(client)
     logger.info(f"Tracking {len(available_coins)} coins | Holding: {list(holdings.keys()) or 'nothing'}")
 
+    # Portfolio value (Day 49): cash + open positions at current market prices
+    total_value = portfolio_value(client, holdings, balance)
+    if holdings:
+        logger.info(f"Portfolio value: ${total_value:.2f} CAD (cash ${balance:.2f} + positions ${total_value - balance:.2f})")
+
     # Check stop-loss / take-profit on all held positions
     if holdings:
         check_exit_conditions(client, holdings)
@@ -381,6 +387,7 @@ def run_trading_cycle() -> None:
     logger.info("=" * 50)
 
     holdings_now = get_holdings(client)
+    final_value = portfolio_value(client, holdings_now, balance)
     write_status(
         balance=balance,
         open_positions=len(holdings_now),
@@ -388,4 +395,5 @@ def run_trading_cycle() -> None:
         wins=_wins,
         losses=_losses,
         starting_balance=_starting_balance,
+        portfolio_value=final_value,
     )
