@@ -23,6 +23,7 @@ from status import write_status
 from headline_cache import filter_new as filter_new_headlines, mark_seen as mark_headlines_seen
 from retry import with_retry
 from portfolio import compute_value as portfolio_value
+from cycle_timer import timed
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,7 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                 logger.info(f"[DRY RUN] Would take-profit sell {coin} | P&L: +${pnl:.2f}")
 
 
+@timed
 def run_trading_cycle() -> None:
     global _starting_balance, _peak_balance, _trades_today, _wins, _losses, _balance_alert_sent
 
