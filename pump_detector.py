@@ -10,6 +10,8 @@ IGNORE_COINS = {
     "EUR", "USDT", "USDC", "DAI", "BUSD",
     # Known high-cap memes — skip these, hunt unknown ones
     "DOGE", "SHIB", "PEPE", "BONK", "TRUMP",
+    # Geo-blocked for CA:ON
+    "BODEN", "CMETH", "DBR", "CAMP", "LION",
 }
 
 
@@ -30,10 +32,10 @@ def find_pumping_coins(client, min_volume_multiplier: float = 2.0, top_n: int = 
     # Build reverse map: pair_name -> coin
     pair_info = {}
     for pair_name, info in pairs_resp.get("result", {}).items():
-        base = info.get("base", "").lstrip("X").lstrip("Z")
+        base = info.get("base", "")
         quote = info.get("quote", "")
-        if quote in ("ZCAD", "ZUSD", "CAD", "USD"):
-            pair_info[pair_name] = {"coin": base, "quote": quote}
+        if quote in ("ZCAD", "CAD"):  # CAD pairs only — account holds CAD
+            pair_info[pair_name] = {"coin": base.lstrip("X").lstrip("Z").upper(), "quote": quote}
 
     candidates = []
 
