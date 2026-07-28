@@ -52,6 +52,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     import schedule
     import heartbeat
     import health
+    import notifier
     import trader
     from config import cfg
 
@@ -86,6 +87,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             if trader._starting_balance else
             f"Session summary: {trader._trades_today} trade(s) | W/L {w}/{l} ({win_rate})"
         )
+        notifier.notify_shutdown(trader._trades_today, w, l, trader._starting_balance, sig_name)
         raise SystemExit(0)
 
     signal.signal(signal.SIGINT, _shutdown)

@@ -77,3 +77,38 @@ def test_dry_run_prefix_in_message(telegram_env, mocker):
     notifier.notify_trade("buy_signal", "DOGE", 10.0, 0.05, dry_run=True)
     payload = post.call_args.kwargs["json"]
     assert "[DRY RUN]" in payload["text"]
+
+
+def test_shutdown_no_op_when_token_missing(monkeypatch, mocker):
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    post = mocker.patch("notifier.requests.post")
+    notifier.notify_shutdown(4, 3, 1, 100.0, "SIGINT")
+    post.assert_not_called()
+
+
+def test_shutdown_sends_session_summary(telegram_env, mocker):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = True
+    post = mocker.patch("notifier.requests.post", return_value=mock_resp)
+    notifier.notify_shutdown(4, 3, 1, 100.0, "SIGINT")
+    payload = post.call_args.kwargs["json"]
+    assert "SIGINT" in payload["text"]
+    assert "Trades today: 4" in payload["text"]
+    assert "3/1" in payload["text"]
+    assert "100.00" in payload["text"]
+
+
+def test_shutdown_omits_balance_when_none(telegram_env, mocker):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = True
+    post = mocker.patch("notifier.requests.post", return_value=mock_resp)
+    notifier.notify_shutdown(0, 0, 0, None, "SIGTERM")
+    payload = post.call_args.kwargs["json"]
+    assert "n/a" in payload["text"]
+    assert "Started at" not in payload["text"]
+
+
+def test_shutdown_network_error_is_non_fatal(telegram_env, mocker):
+    mocker.patch("notifier.requests.post", side_effect=requests.ConnectionError("offline"))
+    notifier.notify_shutdown(1, 1, 0, 50.0, "SIGINT")

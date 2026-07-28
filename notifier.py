@@ -71,6 +71,43 @@ def _build_message(
     return "\n".join(lines)
 
 
+def notify_shutdown(
+    trades_today: int,
+    wins: int,
+    losses: int,
+    starting_balance: Optional[float],
+    signal_name: str,
+) -> None:
+    """Telegram alert on graceful shutdown (Day 52) — mirrors the log line in
+    main.py's _shutdown handler so a VPS restart shows up without SSHing in.
+    Fail-soft, same as notify_trade."""
+    token = _token()
+    chat_id = _chat_id()
+    if not token or not chat_id:
+        return
+
+    total = wins + losses
+    win_rate = f"{wins / total * 100:.0f}%" if total else "n/a"
+    lines = [
+        f"BOT SHUTDOWN ({signal_name})",
+        f"Trades today: {trades_today} | W/L {wins}/{losses} ({win_rate})",
+    ]
+    if starting_balance is not None:
+        lines.append(f"Started at ${starting_balance:.2f} CAD")
+    text = "\n".join(lines)
+
+    try:
+        resp = requests.post(
+            _API_URL.format(token=token),
+            json={"chat_id": chat_id, "text": text},
+            timeout=_TIMEOUT,
+        )
+        if not resp.ok:
+            logger.warning("Telegram shutdown alert failed (%s): %s", resp.status_code, resp.text[:120])
+    except Exception as exc:
+        logger.warning("Telegram shutdown alert error (non-fatal): %s", exc)
+
+
 def notify_trade(
     action: str,
     coin: str,
