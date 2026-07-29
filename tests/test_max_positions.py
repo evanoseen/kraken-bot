@@ -34,7 +34,9 @@ def patched(mocker, monkeypatch, tmp_path):
     mocker.patch("trader.get_tradable_coins", return_value=["DOGE", "SHIB", "PEPE"])
     mocker.patch("trader.check_new_listings", return_value=[])
     mocker.patch("trader.find_pumping_coins", return_value=[])
-    mocker.patch("trader.fetch_top_headlines", return_value=[])
+    mocker.patch("trader.fetch_top_headlines", return_value=[
+        {"title": "test headline (max_positions)", "url": "http://test/max-positions"},
+    ])
     mocker.patch("trader.format_headlines_for_prompt", return_value="")
     mocker.patch("trader.get_price", return_value=0.05)
     mocker.patch("trader.notify_trade")

@@ -95,7 +95,9 @@ def base_patches(mocker, monkeypatch, tmp_path):
     mocker.patch("trader.get_tradable_coins", return_value=["DOGE"])
     mocker.patch("trader.check_new_listings", return_value=[])
     mocker.patch("trader.find_pumping_coins", return_value=[])
-    mocker.patch("trader.fetch_top_headlines", return_value=[])
+    mocker.patch("trader.fetch_top_headlines", return_value=[
+        {"title": "test headline (coin_trade_counter)", "url": "http://test/coin-trade-counter"},
+    ])
     mocker.patch("trader.format_headlines_for_prompt", return_value="")
     mocker.patch("trader.analyze_news_for_trades", return_value=[
         {"coin": "DOGE", "action": "buy", "confidence": 0.9, "reasoning": "test"},

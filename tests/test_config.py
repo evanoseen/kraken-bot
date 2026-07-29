@@ -26,6 +26,19 @@ EXPECTED_FIELDS = {
     "take_profit_pct",
     "run_interval_minutes",
     "dry_run",
+    "max_drawdown_pct",
+    "max_open_positions",
+    "max_position_age_hours",
+    "max_trades_per_coin",
+    "max_trades_per_day",
+    "min_balance_reserve",
+    "min_hold_minutes",
+    "min_trade_amount",
+    "profit_target",
+    "trade_cooldown_minutes",
+    "balance_alert_threshold",
+    "telegram_bot_token",
+    "telegram_chat_id",
 }
 
 

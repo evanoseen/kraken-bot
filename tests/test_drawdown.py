@@ -1,6 +1,7 @@
 """Tests for Day 27 drawdown circuit breaker."""
 from __future__ import annotations
 
+import itertools
 import os
 import pytest
 import trader
@@ -35,7 +36,16 @@ def patched(mocker, monkeypatch, tmp_path):
     mocker.patch("trader.get_tradable_coins", return_value=[])
     mocker.patch("trader.check_new_listings", return_value=[])
     mocker.patch("trader.find_pumping_coins", return_value=[])
-    mocker.patch("trader.fetch_top_headlines", return_value=[])
+    # Unique headline per call — this fixture's tests run several cycles back
+    # to back, and the Day 47 cache would treat a repeated headline as
+    # already-seen and skip analyze_news_for_trades on the later calls.
+    counter = itertools.count()
+    mocker.patch(
+        "trader.fetch_top_headlines",
+        side_effect=lambda: [
+            {"title": f"test headline (drawdown #{next(counter)})", "url": None},
+        ],
+    )
     mocker.patch("trader.format_headlines_for_prompt", return_value="")
     mocker.patch("trader.analyze_news_for_trades", return_value=[])
     mock_balance = mocker.patch("trader.get_balance")

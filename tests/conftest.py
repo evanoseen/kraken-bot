@@ -30,6 +30,20 @@ def reset_kraken_rate_limiter(mocker):
     mocker.patch("kraken_client.time.sleep")
 
 
+@pytest.fixture(autouse=True)
+def reset_headline_cache():
+    """Clear the Day 47 seen-headline set so tests never see stale state
+    left over from a different test module's mocked headlines."""
+    try:
+        import headline_cache
+    except Exception:
+        return
+
+    headline_cache.reset()
+    yield
+    headline_cache.reset()
+
+
 # ─── Canned Kraken responses ──────────────────────────────────────────────
 # Shape mirrors the real Kraken REST API: {"error": [...], "result": {...}}.
 

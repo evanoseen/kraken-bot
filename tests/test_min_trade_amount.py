@@ -41,7 +41,9 @@ def base_patches(mocker, monkeypatch, tmp_path):
     mocker.patch("trader.get_tradable_coins", return_value=["DOGE"])
     mocker.patch("trader.check_new_listings", return_value=[])
     mocker.patch("trader.find_pumping_coins", return_value=[])
-    mocker.patch("trader.fetch_top_headlines", return_value=[])
+    mocker.patch("trader.fetch_top_headlines", return_value=[
+        {"title": "test headline (min_trade_amount)", "url": "http://test/min-trade-amount"},
+    ])
     mocker.patch("trader.format_headlines_for_prompt", return_value="")
     mocker.patch("trader.get_price", return_value=0.08)
     return mocker
