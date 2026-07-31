@@ -42,10 +42,14 @@ def test_main_module_sets_info_level():
 
 
 def test_main_module_configures_both_handlers():
-    """Both StreamHandler (stdout) and FileHandler (bot.log) are wired up."""
+    """Both StreamHandler (stdout) and a rotating FileHandler (bot.log,
+    Day 54) are wired up so the log can't grow unbounded on a 24/7 VPS."""
     text = (REPO_ROOT / "main.py").read_text()
     assert "logging.StreamHandler" in text
-    assert 'logging.FileHandler("bot.log")' in text
+    assert "RotatingFileHandler" in text
+    assert '"bot.log"' in text
+    assert "maxBytes" in text
+    assert "backupCount" in text
 
 
 @pytest.mark.parametrize("path", TRADING_MODULES, ids=lambda p: p.name)

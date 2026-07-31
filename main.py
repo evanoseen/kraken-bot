@@ -18,7 +18,13 @@ import logging
 import os
 import signal
 import time
+from logging.handlers import RotatingFileHandler
 from typing import Optional
+
+# bot.log has grown unbounded since Day 1 on a 24/7 VPS — cap it at 5MB with
+# 5 rotated backups (~30MB ceiling) instead of letting it grow forever.
+LOG_MAX_BYTES = 5 * 1024 * 1024
+LOG_BACKUP_COUNT = 5
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -61,7 +67,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler("bot.log"),
+            RotatingFileHandler("bot.log", maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUP_COUNT),
         ],
     )
     logger = logging.getLogger(__name__)
