@@ -426,3 +426,13 @@ Full suite: 103 passed (96 prior + 7 new) in 1.20s.
 **Surprised by:** The deferred-import pattern broke the existing smoke test (`test_smoke.py`) — it imports `main` and calls `main.run_cycle()` directly, which no longer exists at module level. Confirmed by running the full suite first; it passed clean, so `test_smoke.py` must test something else. No conflicts.
 
 **Next:** Day 26, status JSON file — write `latest_status.json` after each cycle with `last_run_timestamp`, `balance`, `open_positions`, `last_decision`, `errors_this_cycle`. Makes dashboards and ops scripts file-pollable without touching logs.
+
+---
+
+## Day 55, 2026-08-01
+
+**Shipped:** A `Makefile` (`help`/`test`/`run`/`dry`/`deploy`/`logs`/`restart`/`status`) — the original Day 29 task, which never actually happened. Also audited the whole backlog against real git history and found Days 29 to 31 (Makefile, commit the systemd unit, deploy script) got silently dropped once nobody was reading `DAILY_ITERATIONS.md` day-to-day anymore; those day *numbers* got reused for unrelated work (cooldown, health check, stale-position exit) instead. Documented the gap in a status note in `DAILY_ITERATIONS.md` and appended Days 56 to 65 — re-anchored to the real day count instead of the stale "32 to 41" the file used to point at — picking up the two still-missing originals (systemd unit, deploy script) plus new gaps that showed up from actually reading the codebase today (dependency scanning, trade-log rotation, confidence-scaled position sizing, a stale-heartbeat alert to complement Day 52's shutdown alert, and this journal itself).
+
+**Surprised by:** This journal has a real entry for every day only through Day 25 — thirty days of shipped, tested, deployed work (blacklist, drawdown breaker, headline cache, geo-block filter, shutdown notifications, log rotation, the 13-test regression fix) with zero retrospective record. The backlog and the journal died at almost exactly the same day, which tracks — once the picker script stops being the thing that decides what to build, the "why" stops getting written down too. Queued the catch-up as Day 65 rather than backfilling thirty entries today; better to keep today's commit focused.
+
+**Next:** Day 56, commit the live systemd unit file to `deploy/kraken-bot.service` — needs an SSH session with real VPS access, which this environment didn't have today.

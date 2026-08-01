@@ -198,3 +198,61 @@ A curated 30-task backlog for shipping a real commit every day on this bot. Each
 ## After Day 31
 
 Day 28's task includes a directive to append Days 32 to 41 to this file. Keep the same shape: name, why, do, done when. Rotate categories so the bot keeps improving along multiple axes.
+
+---
+
+## Status note (added Day 55, 2026-08-01)
+
+The Day 28 directive above was never fulfilled — the backlog stalled at Day 31 and every day since has been picked ad hoc instead of read from this file. Cross-checking `git log` against Days 26 to 31 above: Day 26 (status JSON), Day 27 (drawdown breaker), and Day 28's Telegram half all shipped close to plan, but **Day 29 (Makefile), Day 30 (commit the systemd unit), and Day 31 (deploy script) never happened** — those day numbers got reused for unrelated organic work (cooldown, health check, stale-position exit) once nobody was reading this file anymore.
+
+Day 55 closed the Makefile gap (`Makefile` now exists with `test`/`run`/`dry`/`deploy`/`logs`/`restart`/`status`, mirroring the OPS_RUNBOOK deploy ritual). **Days 30 and 31's originals are still open** — committing `deploy/kraken-bot.service` and writing `scripts/deploy.sh` both need to diff against or reach the live VPS, which the environment doing this backlog work does not have SSH access to. Picked up below as real tasks, re-numbered to the actual day count instead of the stale 32 to 41 range (which real commits already used for other things).
+
+## Day 56: Commit the systemd unit to the repo
+**Why:** The unit file lives only on the server. Losing the server loses the unit. (Original Day 30, never done.)
+**Do:** SSH in, `cat /etc/systemd/system/kraken-bot.service`, save the content to `deploy/kraken-bot.service` in the repo. Reference it from OPS_RUNBOOK.
+**Done when:** `deploy/kraken-bot.service` exists, matches the live unit file byte for byte, and OPS_RUNBOOK references it.
+
+## Day 57: One command deploy script
+**Why:** `make deploy` (Day 55) still hand-waves the rsync/restart/verify steps into raw shell in the Makefile recipe. A dedicated script can fail loudly per step and get exercised on its own. (Original Day 31, never done.)
+**Do:** Write `scripts/deploy.sh`: run pytest, rsync excluding `.env`/`.git`, ssh restart, poll `last_run.txt` (Day 21 heartbeat) until it advances past the pre-deploy timestamp or timeout. Point the Makefile's `deploy` target at it.
+**Done when:** `./scripts/deploy.sh` end to end pushes a no-op change to the VPS, the bot keeps running, and the heartbeat file advances within the timeout.
+
+## Day 58: Dependency vulnerability scan in CI
+**Why:** `SECURITY.md` names "dependency vulnerability policy" as a topic but nothing enforces it — `requirements.txt` has never been scanned.
+**Do:** Add a `pip-audit` (or `safety`) step to `.github/workflows/test.yml` that runs after the pytest step. Document the remediation process in `SECURITY.md`.
+**Done when:** The CI workflow has a vuln-scan step, it runs green on the commit that adds it, and `SECURITY.md`'s dependency section links to it.
+
+## Day 59: Trades CSV/JSONL log rotation
+**Why:** Day 54 rotated `bot.log`. `trades.csv` and `trades.jsonl` (Day 20) are append-only forever too, just slower growing since a trade is rarer than a log line.
+**Do:** Add a `scripts/archive_trades.py` that moves `trades.csv`/`trades.jsonl` entries older than N days into a dated archive file, or rotates by size like Day 54. Wire a monthly cron suggestion into OPS_RUNBOOK.
+**Done when:** Running the script against a synthetic old trades file splits it into current + archived, and both remain valid CSV/JSONL.
+
+## Day 60: `scripts/daily_pnl.py` gains a `--since`/`--until` range
+**Why:** Day 23's script only aggregates by calendar day with no filtering — answering "how did last week go" means eyeballing a long table.
+**Do:** Add `--since YYYY-MM-DD` and `--until YYYY-MM-DD` flags that filter the aggregation window before printing.
+**Done when:** `python3 scripts/daily_pnl.py --since 2026-07-25 --until 2026-07-31` prints only that week's rows and a matching subtotal.
+
+## Day 61: Alert when the heartbeat goes stale
+**Why:** Day 52 added a Telegram alert on *graceful* shutdown, but a hard crash or a hung process (OOM, deadlock) leaves no signal — `last_run.txt` (Day 21) just stops advancing silently.
+**Do:** Write `scripts/check_heartbeat.py`: read `last_run.txt`, and if it's older than `2 * RUN_INTERVAL_MINUTES`, send a Telegram alert via `notifier`. Add an OPS_RUNBOOK section on running it from an external cron (not on the VPS itself, or a wedged VPS can't alert on itself).
+**Done when:** A synthetic stale heartbeat file (timestamp older than the threshold) triggers a Telegram call in a unit test; a fresh one does not.
+
+## Day 62: Position sizing scaled by confidence
+**Why:** Every trade currently uses a flat amount up to `MAX_TRADE_AMOUNT` regardless of whether the signal confidence was 0.80 or 0.99 — no distinction between a marginal and a strong signal.
+**Do:** In `trader.py`, scale the trade size between `MIN_TRADE_AMOUNT` and `MAX_TRADE_AMOUNT` linearly (or another documented curve) based on `confidence`. Document the formula in `STRATEGY.md`.
+**Done when:** A unit test confirms a 0.99-confidence signal sizes a larger trade than an 0.81-confidence signal, both within the configured min/max bounds.
+
+## Day 63: `.env.example` audit against `config.py`
+**Why:** Day 6 wrote `.env.example` once; a dozen `Config` fields have been added since (Day 53's fix confirmed the drift on the test side — the env file itself has never been re-checked).
+**Do:** Diff every `Config.from_env()` os.getenv() call against `.env.example`'s entries. Add any missing var with a comment; remove any that no longer exist.
+**Done when:** A small script or one-liner confirms every env var `config.py` reads appears in `.env.example`, and vice versa.
+
+## Day 64: README badge + status section refresh
+**Why:** Day 13 added a CI badge; day-to-day feature growth since (blacklist, cooldown, headline cache, geo-block filter, shutdown alerts, log rotation) has never been reflected back into the README's feature list.
+**Do:** Regenerate the README "Features" section from the current module set. Confirm the CI badge still resolves and the Day 7 Mermaid diagram still matches the real call graph.
+**Done when:** README's feature list has no gaps against `ls *.py`'s module docstrings, and the Mermaid diagram renders correctly on GitHub.
+
+## Day 65: `JOURNAL.md` catch-up entry
+**Why:** `JOURNAL.md` (Day 1's ask: "one paragraph per day covering what shipped, what surprised you, what's next") has a real entry for every day only through Day 25 — thirty-plus days of shipped work have no journal record.
+**Do:** Write one retrospective entry summarizing Days 26 to 65 as a block: what categories of work happened (features, ops, test-debt), the biggest surprise (the backlog itself going unread for a month), and what's next after Day 65.
+**Done when:** `JOURNAL.md` has a dated entry covering the Day 26-65 gap and resumes normal one-entry-per-day going forward.
