@@ -11,7 +11,7 @@ help:
 	@echo "  make test     run the pytest suite"
 	@echo "  make run      run the bot (scheduler loop, live .env)"
 	@echo "  make dry      run a single cycle with --once --dry-run"
-	@echo "  make deploy   test, then rsync to the VPS (excludes .env) and restart the service"
+	@echo "  make deploy   test, rsync to the VPS (excludes .env), restart, verify heartbeat"
 	@echo "  make logs     tail the last 50 journalctl lines on the VPS"
 	@echo "  make restart  restart the systemd service on the VPS"
 	@echo "  make status   show systemd status on the VPS"
@@ -25,13 +25,11 @@ run:
 dry:
 	$(VENV)/python3 main.py --once --dry-run
 
-# Mirrors the manual deploy ritual in OPS_RUNBOOK.md section "Deploy procedure" —
-# rsync (not scp) so .env and .git on the server are never clobbered.
-deploy: test
-	rsync -av --exclude='.env' --exclude='.git' --exclude='venv' --exclude='__pycache__' \
-		./ $(SERVER):$(REMOTE_DIR)/
-	ssh $(SERVER) 'systemctl restart kraken-bot'
-	ssh $(SERVER) 'journalctl -u kraken-bot -n 20 --no-pager'
+# Day 57: test + rsync + restart + heartbeat verification, all fail-loud.
+# See scripts/deploy.sh for the step-by-step and OPS_RUNBOOK.md for the
+# manual fallback ritual this replaces.
+deploy:
+	./scripts/deploy.sh
 
 logs:
 	ssh $(SERVER) 'journalctl -u kraken-bot -n 50 --no-pager'

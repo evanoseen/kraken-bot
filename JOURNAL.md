@@ -436,3 +436,15 @@ Full suite: 103 passed (96 prior + 7 new) in 1.20s.
 **Surprised by:** This journal has a real entry for every day only through Day 25 — thirty days of shipped, tested, deployed work (blacklist, drawdown breaker, headline cache, geo-block filter, shutdown notifications, log rotation, the 13-test regression fix) with zero retrospective record. The backlog and the journal died at almost exactly the same day, which tracks — once the picker script stops being the thing that decides what to build, the "why" stops getting written down too. Queued the catch-up as Day 65 rather than backfilling thirty entries today; better to keep today's commit focused.
 
 **Next:** Day 56, commit the live systemd unit file to `deploy/kraken-bot.service` — needs an SSH session with real VPS access, which this environment didn't have today.
+
+---
+
+## Day 56 → 57 swap, 2026-08-03
+
+Day 56 (commit the systemd unit) is still blocked on the same missing VPS SSH access flagged in Day 55's entry — confirmed again today, same `Permission denied (publickey,password)`. Per the backlog's own rule 4 ("if today's task is blocked, skip ahead to a different category and note the swap"), swapped to Day 57.
+
+**Shipped:** `scripts/deploy.sh` — runs the test suite, rsyncs to the VPS excluding `.env`/`.git`/`venv`/`__pycache__`, restarts `kraken-bot.service`, then polls `last_run.txt` (Day 21 heartbeat) every 5s for up to 3 minutes until it advances past its pre-deploy value, exiting non-zero if it never does. `Makefile`'s `deploy` target now just calls the script instead of inlining the rsync/restart. Updated `OPS_RUNBOOK.md`'s deploy section to lead with `make deploy` and demote the old manual `rsync`/`ssh` steps to an explicit fallback-if-the-script-itself-is-broken path, and removed the stale "Day 31 backlog item will replace this" forward-reference now that it has.
+
+**Surprised by:** Couldn't actually exercise the done-when ("pushes a no-op change to the VPS... heartbeat advances") — same SSH gap as Day 56. Verified everything short of that: `bash -n` syntax check passes, `make` / `make test` both still work, full suite is 253 green. The heartbeat-polling logic is the one part that's untested against a real restart; worth a real dry run the next time there's VPS access, rather than assuming it's correct just because it reads cleanly.
+
+**Next:** Either get VPS SSH access sorted (unblocks Day 56, and lets Day 57's script get its first live run), or continue down the backlog to Day 58 (CI dependency vuln scan) which doesn't need it.

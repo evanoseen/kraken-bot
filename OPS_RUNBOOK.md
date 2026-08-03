@@ -154,42 +154,49 @@ tail -n 20 trades.csv  # recent trades
 
 The local source of truth is `/Users/evanoseen/kraken-bot/` on Evan's Mac. The VPS copy is downstream — it gets overwritten.
 
-### Standard deploy
+### Standard deploy (Day 57)
 
 ```bash
-# 1. From local repo root, push to the VPS
-scp -r /Users/evanoseen/kraken-bot root@204.168.204.221:/root/
+make deploy
+# or directly:
+./scripts/deploy.sh
+```
+
+This runs the test suite, rsyncs the repo to the VPS (`.env`, `.git`, `venv`, and `__pycache__` excluded so the live secrets file is never clobbered), restarts `kraken-bot.service`, then polls the Day 21 heartbeat file (`last_run.txt`) for up to 3 minutes until it advances past its pre-deploy value. Fails loudly and exits non-zero at whichever step breaks — tests, rsync, restart, or a heartbeat that never advances (the strongest signal the restart actually broke something, not just that `systemctl restart` returned 0).
+
+Healthy startup in the tailed logs looks like:
+```
+"Kraken Meme Coin NewsTrader starting..."
+"Running every N minutes"
+"Balance: $X.XX CAD"
+```
+
+### Manual deploy (fallback, if `scripts/deploy.sh` itself is broken)
+
+```bash
+# 1. From local repo root, push to the VPS — rsync, not scp, so .env is never clobbered
+rsync -av --exclude='.env' --exclude='.git' --exclude='venv' --exclude='__pycache__' \
+  /Users/evanoseen/kraken-bot/ root@204.168.204.221:/root/kraken-bot/
 
 # 2. SSH in and restart the service
 ssh root@204.168.204.221 'systemctl restart kraken-bot'
 
 # 3. Tail logs to confirm the bot came back cleanly
 ssh root@204.168.204.221 'journalctl -u kraken-bot -n 30 --no-pager'
+```
 
-# Healthy startup looks like:
-#   "Kraken Meme Coin NewsTrader starting..."
-#   "Running every N minutes"
-#   "Balance: $X.XX CAD"
+If you ever fall back to `scp -r` instead of `rsync`, back up `.env` first — `scp -r` of the whole directory **will** clobber it:
+```bash
+ssh root@204.168.204.221 'cp /root/kraken-bot/.env /root/kraken-bot/.env.bak'
+scp -r /Users/evanoseen/kraken-bot root@204.168.204.221:/root/
+ssh root@204.168.204.221 'mv /root/kraken-bot/.env.bak /root/kraken-bot/.env'
 ```
 
 ### Pre-deploy checklist (do this every time)
 
 1. `DRY_RUN=true` locally for a full cycle and watched the logs.
-2. No uncommitted secrets in any file you are about to scp.
-3. `.env` on the server is **not** overwritten by accident — `scp -r` of the whole directory **will** clobber it. Either:
-   - Exclude `.env` from the scp:
-     ```bash
-     rsync -av --exclude='.env' --exclude='.git' /Users/evanoseen/kraken-bot/ root@204.168.204.221:/root/kraken-bot/
-     ```
-   - Or back up `.env` first:
-     ```bash
-     ssh root@204.168.204.221 'cp /root/kraken-bot/.env /root/kraken-bot/.env.bak'
-     scp -r /Users/evanoseen/kraken-bot root@204.168.204.221:/root/
-     ssh root@204.168.204.221 'mv /root/kraken-bot/.env.bak /root/kraken-bot/.env'
-     ```
-4. Confirm the service restarted with `systemctl status` showing `active (running)`.
-
-> **Day 31 backlog item** will replace this multi-step ritual with a single `./scripts/deploy.sh` that runs pytest, rsyncs with `.env` excluded, restarts, and tails logs.
+2. No uncommitted secrets in any file about to be synced.
+3. Confirm the service restarted with `systemctl status` showing `active (running)` (or trust `scripts/deploy.sh`'s heartbeat check, which verifies the same thing more precisely).
 
 ---
 
