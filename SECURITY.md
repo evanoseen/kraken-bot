@@ -89,18 +89,20 @@ ssh root@204.168.204.221 'shred -u /root/kraken-bot/.env.bak.*'
 - An attacker with shell access could re-enable the bot before you notice.
 
 ### Posture (current)
-Two halt mechanisms exist today:
-1. **`DRY_RUN=true`** in `.env` then `systemctl restart kraken-bot`. Bot keeps cycling but places no orders. Use this when you want to keep observing behavior.
-2. **`systemctl stop kraken-bot && systemctl disable kraken-bot`**. Bot is gone until you re-enable it. Use this for real incidents.
+Three halt mechanisms exist today:
+1. **`KILL` file in the repo root** (Day 24) — the trader checks for it at the top of each cycle and exits cleanly if present. No SSH-and-systemctl race. `touch KILL` from anywhere with file access stops the bot within one cycle; `rm KILL` resumes it.
+2. **`DRY_RUN=true`** in `.env` then `systemctl restart kraken-bot`. Bot keeps cycling but places no orders. Use this when you want to keep observing behavior.
+3. **`systemctl stop kraken-bot && systemctl disable kraken-bot`**. Bot is gone until you re-enable it. Use this for real incidents.
 
-The **`DAILY_LOSS_LIMIT`** in `config.py` is a soft kill: when session loss exceeds it, the bot halts for the rest of the day. Resets on restart.
-
-### Posture (planned, Day 24)
-A `KILL` file in the repo root. The trader checks for it at the top of each cycle and exits cleanly if present. No SSH-and-systemctl race. `touch KILL` from anywhere with file access stops the bot in under one cycle.
+The **`DAILY_LOSS_LIMIT`** and **`MAX_DRAWDOWN_PCT`** (Day 27) in `config.py` are soft kills: when session loss or drawdown exceeds the configured threshold, the bot halts trading for the rest of the session.
 
 ### Concrete actions
 ```bash
-# Right-now kill switch (until Day 24 ships)
+# Fastest kill switch — no SSH needed if you already have a shell on the box
+ssh root@204.168.204.221 'touch /root/kraken-bot/KILL'
+# Resume: ssh root@204.168.204.221 'rm /root/kraken-bot/KILL'
+
+# Dry-run kill switch
 ssh root@204.168.204.221 'sed -i "s/^DRY_RUN=.*/DRY_RUN=true/" /root/kraken-bot/.env && systemctl restart kraken-bot'
 # Bot now logs decisions but does not place orders.
 
@@ -161,8 +163,28 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager | 
 ### Posture
 - Dependencies are pinned in `requirements.txt`. Upgrades happen deliberately, not via `pip install --upgrade`.
 - Before any dep upgrade: read the changelog, scan the diff for unusual additions (new network endpoints, new file writes, new subprocess calls).
-- Run `pip-audit` against `requirements.txt` monthly and after any upgrade.
+- **`pip-audit` runs in CI on every push and pull request** (Day 58, `.github/workflows/test.yml`) — a known CVE in any pinned dependency fails the build instead of waiting for a monthly manual run to catch it.
 - Treat ANY new transitive dependency as a code review surface.
+
+### Remediation when the CI scan fails
+1. Read the `pip-audit` output — it names the vulnerable package, the installed version, the CVE/GHSA ID, and the first fixed version.
+2. **Verify the fix version actually exists** with `pip index versions <package>` before assuming it's a one-line bump — on Day 58 (2026-08-04), all 8 findings in this repo's dependency tree named a fix version that isn't published on PyPI (confirmed with a freshly-upgraded pip against the real index, not a caching artifact), meaning there was nothing to upgrade to.
+3. If a real fix version exists: bump that one dependency in `requirements.txt` to it. Don't bump unrelated deps in the same commit. Run `pip install -r requirements.txt && pytest -v && pip-audit -r requirements.txt` locally to confirm the fix and that nothing else broke. Commit with a message naming the CVE (`git commit -m "Bump requests to 2.32.6 (PYSEC-2026-2275)"`) so the fix is searchable in history.
+4. If no fixed version exists yet: check whether the vulnerable code path is even reachable by this bot (e.g., a vuln in an HTTP server component of a library only used as a client). Add `--ignore-vuln <ID>` to the CI step (`.github/workflows/test.yml`) with a one-line comment reason, and log it in the table below. Re-check `pip index versions` for that package at the next audit — once a fix ships, remove the ignore and bump.
+5. Never widen an ignore to a whole package or a version range — one `--ignore-vuln <ID>` per advisory, so a *different* future CVE in the same package still fails the build.
+
+### Currently ignored (no fix published yet — checked 2026-08-04)
+
+| ID | Package | Installed | Reachable from this bot? | Revisit |
+|----|---------|-----------|---------------------------|---------|
+| PYSEC-2026-2275 | requests | 2.32.5 | Yes — direct runtime dep (Kraken/Telegram/Anthropic HTTP calls) | Every audit |
+| PYSEC-2026-142, PYSEC-2026-141 | urllib3 | 2.6.3 | Transitive via `requests` | Every audit |
+| PYSEC-2026-2270 | python-dotenv | 1.2.1 | Yes — loads `.env`, never parses untrusted input | Every audit |
+| PYSEC-2026-1845 | pytest | 8.4.2 | No — test-only, never runs on the VPS | Every audit |
+| GHSA-6v7p-g79w-8964 | msgpack | 1.1.2 | No — transitive via `pip-audit`'s own CI-only dependency (`CacheControl`), not installed on the VPS | Every audit |
+| PYSEC-2026-1375, PYSEC-2026-1374 | filelock | 3.19.1 | No — transitive via `pip-audit`, CI-only | Every audit |
+
+`requests` and `python-dotenv` are the two that matter for the live bot; both are already pinned to `>=` their latest available version, so there's nothing more to do until upstream ships an actual fix.
 
 ### Concrete actions
 ```bash
@@ -249,14 +271,8 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager'  
 
 ## Hardening backlog
 
-Items not yet shipped but on the daily-iteration backlog:
+Everything originally listed here — the `KILL` switch, retry/rate-limiter, drawdown circuit breaker, JSONL trade log, status file, and trade notifications — has shipped (Days 18-28 range; see `DAILY_ITERATIONS.md` and `JOURNAL.md` for specifics). One item remains open:
 
-- **`KILL` file kill switch** — Day 24
-- **`tenacity` retry + rate limiter on Kraken API** — Days 18 and 19
-- **Drawdown circuit breaker (15% session)** — Day 27
-- **Trade events as JSONL** (machine-readable forensics) — Day 20
-- **Status JSON file** (`latest_status.json`) — Day 26
-- **Systemd unit committed to repo** (`deploy/kraken-bot.service`) — Day 30
-- **Notifications on trade events** (Telegram or Discord) — Day 28
+- **Systemd unit committed to repo** (`deploy/kraken-bot.service`) — blocked on VPS SSH access, tracked as Day 56 in `DAILY_ITERATIONS.md`.
 
-Until these land, the actions above are the working security posture.
+Once that lands, this file's threat model will be fully backed by shipped controls rather than planned ones.

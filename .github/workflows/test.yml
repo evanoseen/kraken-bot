@@ -36,3 +36,19 @@ jobs:
 
       - name: Run pytest
         run: pytest -v
+
+      - name: Dependency vulnerability scan (pip-audit)
+        # --ignore-vuln entries are advisories with no published fix version
+        # yet (checked against real PyPI, not just pip-audit's feed) — see
+        # SECURITY.md section 5 for the ID -> reasoning -> revisit-date table.
+        # Anything with a real fix available fails the build.
+        run: |
+          pip-audit -r requirements.txt \
+            --ignore-vuln PYSEC-2026-2275 \
+            --ignore-vuln PYSEC-2026-142 \
+            --ignore-vuln PYSEC-2026-141 \
+            --ignore-vuln PYSEC-2026-2270 \
+            --ignore-vuln PYSEC-2026-1845 \
+            --ignore-vuln GHSA-6v7p-g79w-8964 \
+            --ignore-vuln PYSEC-2026-1375 \
+            --ignore-vuln PYSEC-2026-1374
