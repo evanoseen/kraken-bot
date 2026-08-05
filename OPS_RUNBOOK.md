@@ -148,6 +148,27 @@ cat positions.json     # current open positions
 tail -n 20 trades.csv  # recent trades
 ```
 
+### Trade log archiving (Day 59)
+
+`trades.csv` and `trades.jsonl` are append-only forever — same problem `bot.log` had before Day 54 rotated it, just slower growing since a trade is rarer than a log line. `scripts/archive_trades.py` splits entries older than N days (default 90) into a dated archive pair (`trades_archive_<cutoff-date>.csv/.jsonl`) next to the live files, rewriting the live files atomically so a crash mid-run can't corrupt them.
+
+```bash
+# Preview what would move, without writing anything
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/archive_trades.py --dry-run'
+
+# Actually archive entries older than 90 days (the default)
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/archive_trades.py'
+
+# Custom cutoff
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/archive_trades.py --days 30'
+```
+
+**Suggested monthly cron** (run on the VPS, first of the month, well outside market-open hours doesn't matter here since it never touches Kraken):
+```cron
+0 3 1 * * cd /root/kraken-bot && venv/bin/python3 scripts/archive_trades.py >> /root/kraken-bot/archive_trades.log 2>&1
+```
+Install with `ssh root@204.168.204.221 'crontab -e'` and paste the line above. The script is idempotent and network-free — a missed or double-run month is harmless.
+
 ---
 
 ## 4. Deploy procedure

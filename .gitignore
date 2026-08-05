@@ -8,6 +8,8 @@ venv/
 # Runtime state — never commit
 trades.jsonl
 trades.csv
+trades_archive_*.csv
+trades_archive_*.jsonl
 positions.json
 seen_listings.json
 last_run.txt
