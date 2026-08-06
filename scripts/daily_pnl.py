@@ -7,9 +7,14 @@ net CAD cash flow per day plus a net realized-PnL line. Optionally fetches the
 live Kraken balance to answer "what's in the account right now?".
 
 Usage:
-    python3 scripts/daily_pnl.py                 # table + live balance
-    python3 scripts/daily_pnl.py --no-balance    # skip the Kraken network call
+    python3 scripts/daily_pnl.py                          # table + live balance
+    python3 scripts/daily_pnl.py --no-balance             # skip the Kraken network call
     python3 scripts/daily_pnl.py --file path.jsonl
+    python3 scripts/daily_pnl.py --since 2026-07-25 --until 2026-07-31   # one week (Day 60)
+    python3 scripts/daily_pnl.py --since 2026-07-25                     # everything from that day on
+
+`--since`/`--until` (Day 60) both take YYYY-MM-DD and are inclusive on both
+ends; either can be used alone to leave the other side open.
 
 The aggregation functions are import-safe and network-free so they can be unit
 tested; only `fetch_balance()` touches Kraken, and it fails soft.
@@ -19,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -79,6 +85,31 @@ def aggregate_by_day(trades: list[dict]) -> dict[str, dict]:
     return {day: agg[day] for day in sorted(agg)}
 
 
+def _parse_date_arg(value: str) -> str:
+    """argparse `type=` for --since/--until: validate YYYY-MM-DD, pass through unchanged.
+
+    Kept as a string (not a date object) since `_day()` already produces
+    YYYY-MM-DD strings and lexicographic comparison on that format sorts
+    correctly — no need to round-trip through date objects.
+    """
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid date {value!r}, expected YYYY-MM-DD")
+    return value
+
+
+def filter_by_range(trades: list[dict], since: Optional[str], until: Optional[str]) -> list[dict]:
+    """Keep only trades whose calendar-day key falls within [since, until].
+
+    Both bounds are inclusive; either may be None to leave that side open.
+    """
+    return [
+        t for t in trades
+        if (since is None or _day(t) >= since) and (until is None or _day(t) <= until)
+    ]
+
+
 def total_realized_pnl(trades: list[dict]) -> float:
     """Sum `pnl_cad` across all trades that carry it (realized sells)."""
     return sum(float(t["pnl_cad"]) for t in trades if t.get("pnl_cad") is not None)
@@ -133,9 +164,17 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="Path to the trades JSONL file")
     parser.add_argument("--no-balance", action="store_true",
                         help="Skip the live Kraken balance fetch")
+    parser.add_argument("--since", type=_parse_date_arg, default=None,
+                        help="Only include trades on/after this date (YYYY-MM-DD)")
+    parser.add_argument("--until", type=_parse_date_arg, default=None,
+                        help="Only include trades on/before this date (YYYY-MM-DD)")
     args = parser.parse_args(argv)
 
+    if args.since and args.until and args.since > args.until:
+        parser.error(f"--since {args.since} is after --until {args.until}")
+
     trades = load_trades(args.file)
+    trades = filter_by_range(trades, args.since, args.until)
     balance = None if args.no_balance else fetch_balance()
     print(build_report(trades, balance))
     return 0

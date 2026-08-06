@@ -7,6 +7,7 @@ Kraken balance fetch is intentionally not exercised here.
 """
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 from pathlib import Path
@@ -92,3 +93,56 @@ def test_main_runs_offline_with_no_balance(tmp_path, sample_trades, capsys):
     assert rc == 0
     assert "Net realized PnL: +7.00 CAD" in out
     assert "Current Kraken balance" not in out
+
+
+# ── Day 60: --since/--until range filtering ─────────────────────────────────
+
+def test_filter_by_range_since_only(sample_trades):
+    filtered = daily_pnl.filter_by_range(sample_trades, since="2026-06-18", until=None)
+    assert all(daily_pnl._day(t) >= "2026-06-18" for t in filtered)
+    assert len(filtered) == 2
+
+
+def test_filter_by_range_until_only(sample_trades):
+    filtered = daily_pnl.filter_by_range(sample_trades, since=None, until="2026-06-17")
+    assert all(daily_pnl._day(t) <= "2026-06-17" for t in filtered)
+    assert len(filtered) == 2
+
+
+def test_filter_by_range_both_bounds_inclusive(sample_trades):
+    filtered = daily_pnl.filter_by_range(sample_trades, since="2026-06-17", until="2026-06-17")
+    assert len(filtered) == 2
+    assert all(daily_pnl._day(t) == "2026-06-17" for t in filtered)
+
+
+def test_filter_by_range_no_bounds_returns_everything(sample_trades):
+    assert daily_pnl.filter_by_range(sample_trades, since=None, until=None) == sample_trades
+
+
+def test_filter_by_range_excludes_everything_outside_window(sample_trades):
+    assert daily_pnl.filter_by_range(sample_trades, since="2026-07-01", until="2026-07-31") == []
+
+
+def test_parse_date_arg_accepts_valid_date():
+    assert daily_pnl._parse_date_arg("2026-06-17") == "2026-06-17"
+
+
+def test_parse_date_arg_rejects_malformed_date():
+    with pytest.raises(argparse.ArgumentTypeError):
+        daily_pnl._parse_date_arg("06/17/2026")
+
+
+def test_main_since_until_filters_report(tmp_path, sample_trades, capsys):
+    p = _write_jsonl(tmp_path / "trades.jsonl", sample_trades)
+    rc = daily_pnl.main(["--file", str(p), "--no-balance", "--since", "2026-06-18", "--until", "2026-06-18"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "2026-06-18" in out
+    assert "2026-06-17" not in out
+    assert "Net realized PnL: -5.00 CAD" in out  # only the 06-18 sell's pnl
+
+
+def test_main_since_after_until_errors(tmp_path, sample_trades):
+    p = _write_jsonl(tmp_path / "trades.jsonl", sample_trades)
+    with pytest.raises(SystemExit):
+        daily_pnl.main(["--file", str(p), "--no-balance", "--since", "2026-06-18", "--until", "2026-06-17"])
