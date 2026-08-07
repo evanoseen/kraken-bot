@@ -108,6 +108,37 @@ def notify_shutdown(
         logger.warning("Telegram shutdown alert error (non-fatal): %s", exc)
 
 
+def notify_heartbeat_stale(age_minutes: Optional[float], threshold_minutes: float) -> None:
+    """Telegram alert when the heartbeat is stale or missing (Day 61) — the
+    complement to Day 52's graceful-shutdown alert, for hangs and crashes
+    that never reach the shutdown handler at all. Fail-soft, same pattern
+    as notify_trade / notify_shutdown."""
+    token = _token()
+    chat_id = _chat_id()
+    if not token or not chat_id:
+        return
+
+    if age_minutes is None:
+        text = "kraken-bot HEARTBEAT MISSING\nlast_run.txt not found or unreadable."
+    else:
+        text = (
+            f"kraken-bot HEARTBEAT STALE\n"
+            f"Last heartbeat {age_minutes:.1f}m ago (threshold {threshold_minutes:.0f}m).\n"
+            f"Bot may be hung or crashed — check systemctl status kraken-bot."
+        )
+
+    try:
+        resp = requests.post(
+            _API_URL.format(token=token),
+            json={"chat_id": chat_id, "text": text},
+            timeout=_TIMEOUT,
+        )
+        if not resp.ok:
+            logger.warning("Telegram heartbeat alert failed (%s): %s", resp.status_code, resp.text[:120])
+    except Exception as exc:
+        logger.warning("Telegram heartbeat alert error (non-fatal): %s", exc)
+
+
 def notify_trade(
     action: str,
     coin: str,

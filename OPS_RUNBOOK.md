@@ -169,6 +169,31 @@ ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/archiv
 ```
 Install with `ssh root@204.168.204.221 'crontab -e'` and paste the line above. The script is idempotent and network-free — a missed or double-run month is harmless.
 
+### Heartbeat monitoring (Day 61)
+
+Day 52 added a Telegram alert on *graceful* shutdown — but a hard crash, an OOM kill, or a wedged event loop never reaches that handler at all. `last_run.txt` (Day 21) just stops advancing, silently. `scripts/check_heartbeat.py` closes that gap: it compares the heartbeat's age against a threshold (default `2 * RUN_INTERVAL_MINUTES`) and fires a Telegram alert if it's stale or missing.
+
+**This must run from a machine other than the VPS itself.** A cron job on the VPS can't alert you that the VPS is unresponsive — if the box is wedged, that cron job is wedged too. Run it from Evan's Mac (or any other always-on machine) instead, pulling the heartbeat over SSH:
+
+```bash
+# One-shot check from your Mac — pulls the timestamp over SSH, no state left behind
+cd /Users/evanoseen/kraken-bot
+venv/bin/python3 scripts/check_heartbeat.py \
+  --timestamp "$(ssh root@204.168.204.221 'cat /root/kraken-bot/last_run.txt' 2>/dev/null)"
+
+# Custom threshold instead of the config default
+venv/bin/python3 scripts/check_heartbeat.py --threshold-minutes 30 \
+  --timestamp "$(ssh root@204.168.204.221 'cat /root/kraken-bot/last_run.txt' 2>/dev/null)"
+```
+
+**Suggested cron on Evan's Mac** (every 10 minutes; adjust to comfortably undercut `2 * RUN_INTERVAL_MINUTES`):
+```cron
+*/10 * * * * cd /Users/evanoseen/kraken-bot && venv/bin/python3 scripts/check_heartbeat.py --timestamp "$(ssh -o ConnectTimeout=10 root@204.168.204.221 'cat /root/kraken-bot/last_run.txt' 2>/dev/null)" >> /Users/evanoseen/kraken-bot/heartbeat_check.log 2>&1
+```
+Install with `crontab -e` on the local machine (not the VPS). If the SSH pull itself fails (VPS unreachable, not just the bot hung), `--timestamp` receives an empty string, which `check_heartbeat.py` treats the same as a missing heartbeat — you still get alerted, just with "MISSING" instead of "STALE".
+
+`ssh`-ing to fetch a single file every 10 minutes is deliberately simple over building a push-based agent — one dependency (SSH, already required for everything else in this runbook) instead of two.
+
 ---
 
 ## 4. Deploy procedure

@@ -112,3 +112,36 @@ def test_shutdown_omits_balance_when_none(telegram_env, mocker):
 def test_shutdown_network_error_is_non_fatal(telegram_env, mocker):
     mocker.patch("notifier.requests.post", side_effect=requests.ConnectionError("offline"))
     notifier.notify_shutdown(1, 1, 0, 50.0, "SIGINT")
+
+
+def test_heartbeat_stale_no_op_when_token_missing(monkeypatch, mocker):
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    post = mocker.patch("notifier.requests.post")
+    notifier.notify_heartbeat_stale(45.0, 30.0)
+    post.assert_not_called()
+
+
+def test_heartbeat_stale_sends_age_and_threshold(telegram_env, mocker):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = True
+    post = mocker.patch("notifier.requests.post", return_value=mock_resp)
+    notifier.notify_heartbeat_stale(45.3, 30.0)
+    payload = post.call_args.kwargs["json"]
+    assert "STALE" in payload["text"]
+    assert "45.3m" in payload["text"]
+    assert "30m" in payload["text"]
+
+
+def test_heartbeat_missing_sends_missing_message(telegram_env, mocker):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = True
+    post = mocker.patch("notifier.requests.post", return_value=mock_resp)
+    notifier.notify_heartbeat_stale(None, 30.0)
+    payload = post.call_args.kwargs["json"]
+    assert "MISSING" in payload["text"]
+
+
+def test_heartbeat_stale_network_error_is_non_fatal(telegram_env, mocker):
+    mocker.patch("notifier.requests.post", side_effect=requests.ConnectionError("offline"))
+    notifier.notify_heartbeat_stale(60.0, 30.0)
