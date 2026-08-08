@@ -136,6 +136,24 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                 logger.info(f"[DRY RUN] Would take-profit sell {coin} | P&L: +${pnl:.2f}")
 
 
+def size_position(confidence: float, min_confidence: float, min_trade_amount: float, max_trade_amount: float) -> float:
+    """Linearly scale trade size between MIN_TRADE_AMOUNT and MAX_TRADE_AMOUNT
+    based on signal confidence (Day 62).
+
+    Confidence maps over [min_confidence, 1.0] — the only range that reaches
+    this function, since signals below min_confidence are already filtered
+    out upstream. A signal right at the confidence floor sizes the minimum
+    trade; a maximum-confidence (1.0) signal sizes the maximum. Formula and
+    rationale documented in STRATEGY.md's "Position sizing" section.
+    """
+    span = 1.0 - min_confidence
+    if span <= 0:
+        return max_trade_amount
+    t = (confidence - min_confidence) / span
+    t = max(0.0, min(1.0, t))  # clamp defensively against out-of-range confidence
+    return min_trade_amount + t * (max_trade_amount - min_trade_amount)
+
+
 @timed
 def run_trading_cycle() -> None:
     global _starting_balance, _peak_balance, _trades_today, _wins, _losses, _balance_alert_sent
@@ -337,7 +355,10 @@ def run_trading_cycle() -> None:
             logger.warning(f"Could not get price for {coin}")
             continue
 
-        trade_amount = min(cfg.max_trade_amount * confidence, available * 0.25)
+        trade_amount = min(
+            size_position(confidence, cfg.min_confidence, cfg.min_trade_amount, cfg.max_trade_amount),
+            available * 0.25,
+        )
 
         # Trade size floor (Day 46): skip orders too small for the exchange to accept.
         if trade_amount < cfg.min_trade_amount:

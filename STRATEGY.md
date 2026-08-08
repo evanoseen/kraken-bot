@@ -114,7 +114,7 @@ Exits log structured PnL even in dry-run mode.
 **7. Signal merge and placement.** Pump and news signals are concatenated. For each:
 - Sells on coins not currently held are skipped (`trader.py:159`).
 - Price is fetched per coin; coins without a price quote are skipped.
-- Position size is `min(MAX_TRADE_AMOUNT * confidence, balance * 0.25)`. The 25% balance cap is tighter than the listing buy's 30% — listing signals are trusted more.
+- Position size is `min(size_position(confidence), balance * 0.25)` — see "Position sizing and confidence math" below for `size_position`. The 25% balance cap is tighter than the listing buy's 30% — listing signals are trusted more.
 - In dry-run mode, the trade is logged only. Otherwise `place_order` is called, and on success, `record_buy` or `log_trade` (sell branch) persists the position state.
 
 ---
@@ -124,10 +124,35 @@ Exits log structured PnL even in dry-run mode.
 | Signal type | Per-trade size formula | Balance cap | Confidence source |
 |-------------|------------------------|-------------|-------------------|
 | Listing | `min(MAX_TRADE_AMOUNT, balance * 0.3)` | 30% | implicit (no filter) |
-| Pump | `min(MAX_TRADE_AMOUNT * confidence, balance * 0.25)` | 25% | `min(0.65 + spike/50, 0.95)` |
-| News | `min(MAX_TRADE_AMOUNT * confidence, balance * 0.25)` | 25% | Claude output ∩ `>= MIN_CONFIDENCE` |
+| Pump | `min(size_position(confidence), balance * 0.25)` | 25% | `min(0.65 + spike/50, 0.95)` |
+| News | `min(size_position(confidence), balance * 0.25)` | 25% | Claude output ∩ `>= MIN_CONFIDENCE` |
 
-`MAX_TRADE_AMOUNT` is read from `.env` (default `40 CAD` per the live deployment, `25 CAD` per the code's hardcoded fallback). The confidence multiplier scales the absolute dollar exposure down for less certain signals.
+`MAX_TRADE_AMOUNT` is read from `.env` (default `40 CAD` per the live deployment, `25 CAD` per the code's hardcoded fallback).
+
+### `size_position` — confidence-scaled sizing (Day 62)
+
+Before Day 62, position size was `MAX_TRADE_AMOUNT * confidence` — a multiplier with no floor tied to `MIN_TRADE_AMOUNT` and no explicit relationship to the confidence range that actually reaches the sizing code (signals below `MIN_CONFIDENCE` are already filtered out upstream, so the multiplier's effective domain was `[MIN_CONFIDENCE, 1.0]`, not `[0, 1]`, even though it was written as if it were).
+
+`size_position` (`trader.py`) replaces it with an explicit linear map over that real domain:
+
+```
+t = clamp((confidence - MIN_CONFIDENCE) / (1.0 - MIN_CONFIDENCE), 0, 1)
+size = MIN_TRADE_AMOUNT + t * (MAX_TRADE_AMOUNT - MIN_TRADE_AMOUNT)
+```
+
+A signal right at the confidence floor (`confidence == MIN_CONFIDENCE`) sizes the minimum trade. A maximum-confidence signal (`confidence == 1.0`) sizes the maximum. Confidence in between scales linearly. The clamp is defensive — nothing upstream should hand `size_position` a confidence outside `[MIN_CONFIDENCE, 1.0]`, but the function doesn't trust that silently.
+
+Worked example at the code defaults (`MIN_CONFIDENCE=0.80`, `MIN_TRADE_AMOUNT=1.0`, `MAX_TRADE_AMOUNT=25.0`):
+
+| Confidence | `t` | Trade size |
+|------------|-----|------------|
+| 0.80 (floor) | 0.00 | $1.00 |
+| 0.81 | 0.05 | $2.20 |
+| 0.90 | 0.50 | $13.00 |
+| 0.99 | 0.95 | $23.80 |
+| 1.00 | 1.00 | $25.00 |
+
+The `balance * 0.25` cap in the table above still applies on top of `size_position` — a maxed-out confidence signal on a small account is still capped by available balance, not just by `MAX_TRADE_AMOUNT`.
 
 ---
 

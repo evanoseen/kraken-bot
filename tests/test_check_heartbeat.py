@@ -65,8 +65,12 @@ def test_check_exactly_at_threshold_is_not_stale():
 # ── main(): the actual done-when — stale triggers a Telegram call, fresh doesn't ──
 
 def test_main_fresh_heartbeat_does_not_alert(tmp_path, mocker):
+    # main() has no way to inject a fake "now" (unlike check(), used above),
+    # so this has to use a real relative offset, not the fixed NOW constant —
+    # a hardcoded date here would silently start failing the day after it's
+    # written, once real "now" drifts past it.
     hb_file = tmp_path / "last_run.txt"
-    hb_file.write_text((NOW - timedelta(minutes=5)).isoformat())
+    hb_file.write_text((datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat())
     alert = mocker.patch("notifier.notify_heartbeat_stale")
 
     rc = check_heartbeat.main(["--file", str(hb_file), "--threshold-minutes", "30"])

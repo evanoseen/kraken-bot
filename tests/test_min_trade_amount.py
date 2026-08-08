@@ -57,9 +57,10 @@ def _reload(monkeypatch, mocker):
 
 def test_trade_skipped_below_floor(base_patches, monkeypatch, caplog):
     mocker = base_patches
-    # balance=6, available=6, confidence=0.05, max_trade=25 → size=1.25*0.05=1.25 but
-    # available*0.25=1.50 → trade_amount=min(25*0.05, 6*0.25)=min(1.25,1.5)=1.25
-    # Set MIN_TRADE_AMOUNT=5 so 1.25 is below floor
+    # confidence=0.05 is below MIN_CONFIDENCE (0.80 default), so size_position
+    # (Day 62) clamps it to MIN_TRADE_AMOUNT=5.0 — but the available*0.25 cap
+    # binds first: balance=6, available=6 → available*0.25=1.5 →
+    # trade_amount=min(5.0, 1.5)=1.5, which is still below the 5.0 floor.
     monkeypatch.setenv("MIN_TRADE_AMOUNT", "5.0")
     monkeypatch.setenv("MAX_TRADE_AMOUNT", "25.0")
     _reload(monkeypatch, mocker)
