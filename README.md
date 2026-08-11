@@ -6,21 +6,42 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 
 ## Features
 
-- **News-based signals** — Uses Claude AI (claude-opus-4-6) to analyze crypto news headlines from 6 RSS feeds and generate buy/sell signals
-- **Pump detector** — Identifies coins with 3x+ volume spikes vs. normal (early pump detection)
-- **New listing monitor** — Watches Kraken's blog RSS feed and buys coins the moment they list
-- **Risk management** — Daily loss limit, per-trade size caps, dry run mode
+**Signals**
+- **News-based signals** — Claude AI analyzes crypto news headlines and ~50 high-signal X/Twitter accounts via RSS, returns buy/sell signals with confidence scores
+- **Pump detector** — Identifies obscure coins (< $5M daily volume) with 3x+ volume spikes vs. normal, geo-blocked-for-Ontario tickers excluded
+- **New listing monitor** — Watches Kraken's blog RSS feed and buys watchlisted coins the moment they list
+- **Headline dedup cache** — Skips re-analyzing headlines already seen this session, saving Claude API calls
+
+**Risk management**
+- **Confidence-scaled position sizing** — Trade size scales linearly between `MIN_TRADE_AMOUNT` and `MAX_TRADE_AMOUNT` based on signal confidence, not a flat amount
+- **Daily loss limit + drawdown circuit breaker** — Halts trading for the day on either a fixed CAD loss or a percentage drawdown from the session peak
+- **Balance reserve floor** — A configurable CAD amount the bot will never trade with
+- **Per-coin blacklist, per-coin trade cap, and post-trade cooldown** — Prevents hammering the same ticker across cycles
+- **Max open positions + max trades per day** — Hard ceilings independent of signal confidence
+- **Min hold time + max position age** — Prevents flip-flopping on a position just entered, and force-exits dead money
 - **Kill switch** — `touch KILL` in the repo root halts all trading instantly (next cycle becomes a no-op); `rm KILL` resumes — no restart, no SSH-to-systemctl
-- **24/7 operation** — Runs as a systemd service on a Linux VPS
+- **Dry run mode** — `DRY_RUN=true` logs every decision with zero real orders
+
+**Ops & observability**
+- **24/7 operation** — Runs as a systemd service on a Linux VPS, `Restart=always`
+- **Telegram alerts** — Fires on every trade, on graceful shutdown with a session summary, and when the heartbeat goes stale (crash/hang detection, meant to run from a separate machine)
+- **Heartbeat + status file** — `last_run.txt` and `status.json` answer "is the bot alive, and what's it doing" without SSHing in or parsing logs
+- **Structured trade log** — Every trade appended to both `trades.csv` and `trades.jsonl`, with a monthly archive script so neither grows forever
+- **Rotating log file + retry/backoff + rate limiting** — `bot.log` caps at 5MB × 5 backups; Kraken API calls retry on transient errors and stay under 1/sec
+- **One-command deploy** — `make deploy` tests, rsyncs, restarts the service, and verifies the heartbeat advanced before declaring success
+- **CI on every push** — pytest plus a `pip-audit` dependency vulnerability scan
 
 ## How It Works
 
-Every 5 minutes the bot:
-1. Checks your CAD balance and daily loss limit
-2. Scans Kraken blog for new coin listings → buys immediately
-3. Detects volume spikes across all tradable coins
-4. Fetches 60 latest crypto headlines and sends them to Claude AI
-5. Combines signals and places market orders on Kraken
+Every `RUN_INTERVAL_MINUTES` (default 15) the bot:
+1. Checks the kill switch, balance, daily loss limit, and drawdown circuit breaker
+2. Checks stop-loss / take-profit / max-age exits on anything currently held
+3. Scans Kraken's blog for new coin listings → buys watchlisted coins immediately
+4. Detects volume spikes across all tradable coins
+5. Fetches new crypto headlines and sends them to Claude AI for signal extraction
+6. Merges signals, applies every risk gate (blacklist, cooldown, position caps, sizing), and places market orders
+
+Full stage-by-stage detail, confidence math, and the exact sizing formula live in [STRATEGY.md](STRATEGY.md).
 
 ## Architecture
 
@@ -42,10 +63,13 @@ flowchart LR
         PD["pump_detector.py"]
     end
 
-    TRADER["trader.py<br/>cycle orchestrator"]
-    POS[("positions.json<br/>trades.csv")]
+    KILL["KILL file<br/>kill switch"]
+    TRADER["trader.py<br/>cycle orchestrator<br/>+ risk gates + sizing"]
+    POS[("positions.json<br/>trades.csv / trades.jsonl<br/>status.json / last_run.txt")]
     KC["kraken_client.py"]
     KEX["Kraken Exchange<br/>REST API"]
+    NOTIFY["notifier.py"]
+    TG["Telegram"]
 
     RSS --> NF
     NF --> MM
@@ -56,10 +80,13 @@ flowchart LR
     MM --> TRADER
     LM --> TRADER
     PD --> TRADER
+    KILL -.halts.-> TRADER
 
     TRADER --> KC
     KC --> KEX
     TRADER <--> POS
+    TRADER --> NOTIFY
+    NOTIFY --> TG
 ```
 
 ## Setup
@@ -81,20 +108,14 @@ pip install -r requirements.txt
 
 ### Configure
 
-Create a `.env` file (never commit this):
-
-```env
-KRAKEN_API_KEY=your_kraken_api_key
-KRAKEN_PRIVATE_KEY=your_kraken_private_key
-ANTHROPIC_API_KEY=your_anthropic_api_key
-MAX_TRADE_AMOUNT=40.0
-MIN_CONFIDENCE=0.65
-RUN_INTERVAL_MINUTES=5
-DAILY_LOSS_LIMIT=100.0
-DRY_RUN=true
+```bash
+cp .env.example .env
+$EDITOR .env
 ```
 
-Set `DRY_RUN=false` to go live.
+Fill in `KRAKEN_API_KEY`, `KRAKEN_PRIVATE_KEY`, and `ANTHROPIC_API_KEY`; everything else has a safe default. [.env.example](.env.example) documents all 26 variables the bot reads — it's kept in exact sync with the code by [tests/test_env_example.py](tests/test_env_example.py), so it's always current.
+
+Set `DRY_RUN=false` to go live, only after watching at least one full dry-run cycle in the logs.
 
 ### Run locally
 
@@ -105,11 +126,10 @@ python3 main.py
 
 ### Deploy to VPS (Linux/Ubuntu)
 
-```bash
-# Upload files
-scp -r . root@YOUR_SERVER_IP:/root/kraken-bot
+**First-time setup** — upload the repo, install the venv, and create a systemd unit:
 
-# SSH in and install
+```bash
+rsync -av --exclude='.env' --exclude='.git' --exclude='venv' ./ root@YOUR_SERVER_IP:/root/kraken-bot/
 ssh root@YOUR_SERVER_IP
 cd /root/kraken-bot
 python3 -m venv venv && source venv/bin/activate
@@ -141,31 +161,74 @@ systemctl enable kraken-bot
 systemctl start kraken-bot
 ```
 
+**Every deploy after that** — one command from the local repo:
+
+```bash
+make deploy
+```
+
+Runs the test suite, rsyncs (never touching the server's `.env`), restarts the service, and polls the heartbeat file until it advances or times out — see [OPS_RUNBOOK.md](OPS_RUNBOOK.md) for the full deploy/rollback/incident-response runbook.
+
 Check logs:
 ```bash
-journalctl -u kraken-bot -n 50 --no-pager
+make logs
+# or: journalctl -u kraken-bot -n 50 --no-pager
 ```
 
 ## Project Structure
 
 ```
 kraken-bot/
-├── main.py              # Scheduler — runs every N minutes
-├── trader.py            # Main trading logic
-├── kraken_client.py     # Kraken API wrapper
-├── market_matcher.py    # Claude AI news analysis
-├── pump_detector.py     # Volume spike detection
-├── listing_monitor.py   # New listing monitor (Kraken blog RSS)
-├── news_fetcher.py      # RSS feed fetcher (6 sources)
-├── config.py            # Loads .env settings
+├── main.py                    # Entry point — CLI flags, scheduler loop, graceful shutdown
+├── trader.py                  # Cycle orchestrator — the main trading logic
+├── kraken_client.py           # Kraken REST API wrapper (retry + rate limiting)
+├── config.py                  # .env → frozen Config dataclass
+├── health.py                  # Startup checks — env vars, Kraken connectivity, config banner
+│
+│   # Signal sources
+├── news_fetcher.py            # RSS + Twitter/Nitter headline fetcher
+├── market_matcher.py          # Sends headlines to Claude, parses trade signals
+├── pump_detector.py           # Volume-spike scanner for obscure coins
+├── listing_monitor.py         # Kraken blog RSS → new-listing buys
+├── headline_cache.py          # Dedup so repeat headlines skip Claude
+│
+│   # Risk management
+├── blacklist.py               # Coin blacklist
+├── cooldown.py                # Post-trade per-coin cooldown
+├── coin_trade_counter.py      # Per-coin trade cap
+├── signals.py                 # Pump + news signal dedup/merge
+├── kill_switch.py             # KILL file check
+│
+│   # State, logging, and ops
+├── positions.py               # positions.json read/write + trade logging
+├── trade_logger.py            # Structured JSONL/CSV trade log
+├── status.py                  # status.json cycle snapshot
+├── heartbeat.py                # last_run.txt liveness file
+├── portfolio.py                # Cash + open-position valuation
+├── cycle_timer.py              # Per-cycle timing decorator
+├── retry.py                    # Exponential backoff for Kraken calls
+├── notifier.py                 # Telegram alerts (trades, shutdown, stale heartbeat)
+│
+├── scripts/
+│   ├── daily.sh                # Prints today's DAILY_ITERATIONS.md task
+│   ├── daily_pnl.py            # Per-day PnL report, --since/--until range
+│   ├── archive_trades.py       # Rotates old trades.csv/trades.jsonl entries
+│   ├── check_heartbeat.py      # Telegram alert if the heartbeat goes stale (run off-VPS)
+│   └── deploy.sh                # test → rsync → restart → verify heartbeat
+│
+├── tests/                       # 45 test files, run with `make test` / `pytest`
+├── Makefile                     # help/test/run/dry/deploy/logs/restart/status
+├── .github/workflows/test.yml   # CI: pytest + pip-audit on every push
 └── requirements.txt
 ```
+
+Docs: [STRATEGY.md](STRATEGY.md) (signal + sizing detail), [OPS_RUNBOOK.md](OPS_RUNBOOK.md) (deploy/incident response), [SECURITY.md](SECURITY.md) (threat model), [ISA.md](ISA.md) (project spec).
 
 ## Daily Iteration
 
 This repo follows a daily iteration discipline. Each day a small, scoped improvement lands as a commit so the bot keeps compounding.
 
-- [DAILY_ITERATIONS.md](DAILY_ITERATIONS.md) holds the 30 task backlog (docs, tests, refactors, observability, features, ops).
+- [DAILY_ITERATIONS.md](DAILY_ITERATIONS.md) holds the task backlog (docs, tests, refactors, observability, features, ops) — now well past its original 30, extended as of Day 55.
 - [JOURNAL.md](JOURNAL.md) records what shipped each day.
 - Run `./scripts/daily.sh` from the repo root to see today's task.
 
@@ -180,3 +243,9 @@ This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to 
 - [Anthropic Claude API](https://www.anthropic.com) — AI news analysis
 - feedparser — RSS ingestion
 - schedule — job scheduling
+- tenacity — retry/backoff on Kraken API calls
+- requests — Telegram + Kraken connectivity check
+- python-dotenv — `.env` loading
+- pytest / pytest-mock — 45 test files, run in CI on every push
+- pip-audit — dependency vulnerability scanning in CI
+- mypy — type checking on `kraken_client.py` and `trader.py`
