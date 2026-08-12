@@ -448,3 +448,32 @@ Day 56 (commit the systemd unit) is still blocked on the same missing VPS SSH ac
 **Surprised by:** Couldn't actually exercise the done-when ("pushes a no-op change to the VPS... heartbeat advances") — same SSH gap as Day 56. Verified everything short of that: `bash -n` syntax check passes, `make` / `make test` both still work, full suite is 253 green. The heartbeat-polling logic is the one part that's untested against a real restart; worth a real dry run the next time there's VPS access, rather than assuming it's correct just because it reads cleanly.
 
 **Next:** Either get VPS SSH access sorted (unblocks Day 56, and lets Day 57's script get its first live run), or continue down the backlog to Day 58 (CI dependency vuln scan) which doesn't need it.
+
+---
+
+## Days 26-54 & 58-64 catch-up, 2026-08-12
+
+Day 55's entry already covered the headline finding — this backlog and this journal both went unread for over a month, Days 26-54 shipped entirely from commit messages with zero retrospective record, and 55/56→57 already got their own real entries when they landed. This block closes the rest of the gap: Days 26-54, then 58-64, which shipped with good commit messages but no journal paragraph.
+
+**Shipped, by category:**
+
+- **Risk & safety guardrails** (27, 28, 29, 31, 34, 39, 40, 41, 43, 44, 46, 51) — the bulk of the volume. Drawdown circuit breaker, max open positions, post-trade cooldown, max position age, daily trade cap, coin blacklist, session profit target, per-coin trade cap, balance reserve floor, min hold time, min trade amount floor, and a geo-blocked-coin filter with CAD-only pair matching. Individually each is a 10-30 minute guardrail; together they're most of what makes `DRY_RUN=false` defensible on a bot trading real CAD.
+- **Notifications & observability** (26, 36, 37, 38, 45, 48, 49, 50, 52, 61) — Telegram trade alerts, a win-rate tracker, graceful shutdown with a session summary (later paired with a Telegram alert on Day 52), a low-balance warning, `status.json`, a retry wrapper, portfolio valuation, per-cycle timing, and — after a gap where only *graceful* exits alerted — a stale-heartbeat check for crashes and hangs.
+- **Signal & data quality** (30, 33, 42, 47) — a startup health check, pump+news signal dedup so one coin can't double-trigger, structured CSV trade logging, and a headline dedup cache so repeat news doesn't re-burn Claude calls.
+- **Test debt** (53) — the single largest fix in this range: Day 47's headline cache silently broke 13 tests across 6 files because their fixtures mocked `fetch_top_headlines` to return `[]`, which the new cache correctly read as "nothing new" and discarded every injected signal. Nobody caught it for six days because nobody was running the full suite and reading the count.
+- **Ops infrastructure** (54, 58, 59, 60) — log rotation for `bot.log`, `pip-audit` wired into CI (which immediately surfaced 8 advisories with no real fix published yet — resolved by ignoring them by exact ID with a revisit note, not by pretending they didn't exist), a monthly trade-log archiver, and a `--since`/`--until` range for the PnL script.
+- **Documentation truing-up** (63, 64) — audited `.env.example` against the actual codebase (clean — someone had kept it in sync) and regenerated the README's Features/Structure/Tech-Stack sections, which still described an 8-file, 6-RSS-feed bot from Day 7 while the real one had grown to 23 modules with Telegram alerts, a kill switch, and a deploy pipeline.
+
+**Biggest surprise:** Not any single bug — it's the pattern. Every "audit X against reality" day in this range (53's tests, 58's dependency scan, 63's env file, 64's README) found real drift, at almost the exact rate you'd expect from a month of unsupervised daily commits with nobody reading the meta-layer. The one exception, Day 63, is worth naming precisely *because* it was the exception: `.env.example` stayed in sync the whole time, which means it's possible to not drift — it just requires the habit, not luck. Where these fixes differ from Day 55's original discovery: several (53, 63) were built as permanent regression guards (a test, an AST-derived check) instead of one-time corrections, specifically so the next audit doesn't find the same class of staleness again.
+
+**Next:** `DAILY_ITERATIONS.md` caps at Day 65 — this entry. It needs extending again, the same overdue-maintenance pattern Day 55 found the first time, except caught before a month passes this time. The one concrete open item is still Day 56 (commit the systemd unit to `deploy/kraken-bot.service`), blocked on VPS SSH access this environment doesn't have.
+
+---
+
+## Day 65, 2026-08-12
+
+**Shipped:** This journal's own catch-up. The task was "write one retrospective entry summarizing Days 26-65 as a block" — done above, grouped by category (risk guardrails, notifications, signal quality, test debt, ops infra, docs) rather than a day-by-day recap, since a list of 36 one-line summaries would've buried the actual finding. Days 55 and 56→57 already had real entries from when they shipped, so the block covers the remaining gap (26-54, 58-64) instead of duplicating those two.
+
+**Surprised by:** Writing the retrospective surfaced something the day-to-day commit messages didn't make visible on their own — four separate days in this range (53, 58, 63, 64) were all the same shape: "audit X against what the code actually does, find real drift." That's not a coincidence of what got picked each day; it's what happens when a month goes by without anyone reading the meta-layer. The fix isn't "be more careful" — it's that two of those four (53, 63) got built as permanent checks instead of one-time corrections, which is the actual lesson worth carrying forward, not just the drift itself.
+
+**Next:** Day 66 needs `DAILY_ITERATIONS.md` extended past its current Day 65 ceiling — the backlog running out is itself the thing this journal entry is about, so letting it happen again immediately would be a bad look. After that, Day 56 (systemd unit → `deploy/kraken-bot.service`) is still the one item blocked purely on VPS SSH access, whenever that's available.
