@@ -256,3 +256,59 @@ Day 55 closed the Makefile gap (`Makefile` now exists with `test`/`run`/`dry`/`d
 **Why:** `JOURNAL.md` (Day 1's ask: "one paragraph per day covering what shipped, what surprised you, what's next") has a real entry for every day only through Day 25 — thirty-plus days of shipped work have no journal record.
 **Do:** Write one retrospective entry summarizing Days 26 to 65 as a block: what categories of work happened (features, ops, test-debt), the biggest surprise (the backlog itself going unread for a month), and what's next after Day 65.
 **Done when:** `JOURNAL.md` has a dated entry covering the Day 26-65 gap and resumes normal one-entry-per-day going forward.
+
+---
+
+## Status note (added Day 66, 2026-08-14)
+
+This backlog hit its ceiling again — same pattern as the Day 55 status note above, just caught after 10 days instead of a month, because Day 65's journal entry flagged it as the very next task instead of it silently going unread. Re-surveyed the codebase before writing new entries rather than guessing: found two small real bugs fixed directly today (`.gitignore` excluded `latest_status.json`, a filename from the original Day 26 plan, instead of `status.json`, what Day 45 actually shipped — meaning the real runtime status file was never excluded from git; `STRATEGY.md`'s "Known structural weaknesses" section was 100% stale, listing seven things that all shipped between Days 18 and 53). `STRATEGY.md` has the re-audited, currently-true version of that list — Days 67-76 below are pulled directly from it, not invented.
+
+## Day 67: Docstrings for the remaining modules
+**Why:** Day 3 covered `kraken_client.py` only. `heartbeat.py`, `kill_switch.py`, `listing_monitor.py`, `market_matcher.py`, `news_fetcher.py`, `positions.py`, `pump_detector.py`, and `trader.py` still have no module docstring — confirmed via Day 64's docstring audit.
+**Do:** Add a module-level docstring to each file listed above, matching the style already used elsewhere (one-line summary, Day-number reference if it shipped as a named feature, brief usage note where non-obvious).
+**Done when:** `python3 -c "import ast; [print(f, bool(ast.get_docstring(ast.parse(open(f).read())))) for f in [...]]"` prints `True` for every file in the list.
+
+## Day 68: Type hints + mypy clean beyond kraken_client.py and trader.py
+**Why:** Days 15-16 only covered two files. Day 66 found this the hard way: a mypy version bump stopped honoring `mypy.ini`'s `follow_imports = silent`, which turned two *latent* transitive-import issues into two *failing* tests (`config.py`'s `Optional[str]`-into-`float()` pattern, and a missing `types-requests` stub for `notifier.py`) — both fixed same-day to get back to green, but `status.py` and `blacklist.py` are still unaudited and have no type hints at all.
+**Do:** Add full type hints to `status.py` and `blacklist.py` (config.py and notifier.py's known issues are already fixed as of Day 66). Fix whatever else mypy surfaces now that `follow_imports=silent` can't be relied on to hide it.
+**Done when:** `python3 -m mypy --ignore-missing-imports config.py notifier.py status.py blacklist.py` returns zero errors.
+
+## Day 69: Trailing stop-loss exit option
+**Why:** The strategy's biggest asymmetry, flagged in the Day 4 journal entry and still true today — three independent catalyst-driven entry signals, but exit is just two fixed percentages off the entry price. Nothing locks in gains as a position runs up before reversing.
+**Do:** Add a `TRAILING_STOP_PCT` config option (optional, defaults to disabled = current behavior). When set, track the position's peak price since entry and exit if price falls `TRAILING_STOP_PCT` off that peak, instead of only checking against the fixed entry-price stop-loss. Document the interaction with `STOP_LOSS_PCT`/`TAKE_PROFIT_PCT` in `STRATEGY.md`.
+**Done when:** A unit test simulating a position that runs up 20% then drops 8% triggers a trailing-stop exit at the configured trail percentage, while an equivalent position that never ran up does not exit early.
+
+## Day 70: Nitter failover unit test
+**Why:** `news_fetcher.py` fails over across three Nitter instances (`nitter.poast.org`, `nitter.privacydev.net`, `nitter.1d4.us`), but nothing exercises that path — a partial outage's actual behavior is unverified.
+**Do:** Mock the first one or two instances to fail (timeout, 5xx, connection error) and assert the fetcher falls through to the next, and that a headline set is still returned. Cover the all-three-down case too (should degrade to empty, not crash).
+**Done when:** `pytest tests/test_news_fetcher.py -v` shows passing tests for single-instance failure, cascading failure, and all-instances-down, each asserting the expected fallback behavior.
+
+## Day 71: Pin requirements.txt upper bounds
+**Why:** Every dependency is `>=` with no ceiling, so a fresh install can silently pull a breaking major-version bump. `SECURITY.md`'s policy says to read the changelog before any upgrade, but nothing enforces that on first install — the unpin itself is the gap, not the absence of a policy.
+**Do:** Add an upper-bound pin to each entry in `requirements.txt` (e.g. `requests>=2.31.0,<3.0.0`), one major version above the currently-installed version. Document the bump procedure (bump one dep, run `make test`, commit) in `SECURITY.md` section 5.
+**Done when:** Every line in `requirements.txt` has both a lower and upper bound, `make test` still passes, and CI is green on the commit that adds the pins.
+
+## Day 72: Test coverage measurement
+**Why:** 300+ tests exist with zero visibility into which lines or branches they actually exercise. A green suite doesn't mean full coverage — it means the tests that exist pass.
+**Do:** Add `pytest-cov` to `requirements.txt`. Wire `--cov=. --cov-report=term-missing` into `make test` (or a separate `make coverage` target). Report the overall percentage and identify the two or three files with the lowest coverage.
+**Done when:** `make coverage` (or equivalent) prints a per-file coverage table and an overall percentage, committed as a comment or note in this backlog entry once run.
+
+## Day 73: Config validation at load time
+**Why:** `Config.from_env()` casts every env var to its type but never checks whether the *values* make sense — `MIN_TRADE_AMOUNT > MAX_TRADE_AMOUNT`, a negative `STOP_LOSS_PCT`, `MIN_CONFIDENCE` outside `[0, 1]` would all load silently and fail confusingly downstream instead of failing loud at startup, where `health.py` already checks for *missing* vars but not nonsensical ones.
+**Do:** Add a `validate()` method (or inline checks in `from_env()`) that raises a clear `ValueError` for out-of-range or contradictory values. Call it from `health.run_checks()` alongside the existing missing-var check.
+**Done when:** A unit test with `MIN_TRADE_AMOUNT` set above `MAX_TRADE_AMOUNT` raises a clear error at config load time instead of silently producing a broken `size_position()` curve.
+
+## Day 74: Positions reconciliation check
+**Why:** `SECURITY.md`'s incident-response runbook manually compares `positions.json` to the Kraken ledger *during* an incident — there's no day-to-day check that catches drift (a manual trade, a partial fill, state corruption) before it escalates into one.
+**Do:** Write `scripts/reconcile_positions.py`: fetch live Kraken holdings, compare against `positions.json`, and report (or Telegram-alert via `notifier`, matching Day 61's pattern) any coin held on one side but not the other. Suggest a daily cron in `OPS_RUNBOOK.md`.
+**Done when:** Run against a synthetic mismatch (a coin in `positions.json` not in the mocked Kraken holdings, and vice versa) and confirm both directions are reported.
+
+## Day 75: `SECURITY.md` re-audit for stale "planned" language
+**Why:** Day 58 fixed the dependency-policy section and the kill-switch section's stale "planned, Day 24" wording, but didn't do a full pass — the same drift pattern that hit `STRATEGY.md` (fixed Day 66) and the README (fixed Day 64) may still be sitting in the other five sections.
+**Do:** Read `SECURITY.md` top to bottom against the current codebase. Fix any remaining "planned"/"will"/future-tense language describing something that has already shipped.
+**Done when:** A grep for `planned|will add|not yet` across `SECURITY.md` returns zero matches that describe already-shipped functionality.
+
+## Day 76: Dependabot config for automated dependency PRs
+**Why:** Day 58's `pip-audit` finds known vulnerabilities but doesn't propose the fix; Day 71 pins upper bounds but someone still has to notice when a new minor/patch version ships. Automating the PR closes the loop between "audit found something" and "someone bumps it."
+**Do:** Add `.github/dependabot.yml` configured for the `pip` ecosystem, weekly schedule, grouped minor/patch updates. Confirm it targets `requirements.txt`.
+**Done when:** `.github/dependabot.yml` exists, is valid YAML, and GitHub's repo settings show Dependabot as active for this repo (Insights → Dependency graph → Dependabot).

@@ -182,15 +182,16 @@ Positions are persisted in `positions.json` (`positions.py`) so the bot can reco
 
 ## Known structural weaknesses
 
-This list is honest, not a roadmap. Each item is either an open backlog task in `DAILY_ITERATIONS.md` or a candidate to be added.
+This list is honest, not a roadmap. It was last true around Day 13 — retry/backoff, a rate limiter, the kill switch, the drawdown breaker, JSONL trade events, latency logging, and the test suite itself all shipped since (Days 18-53) and this section never got updated to say so, which is exactly the kind of drift Day 64 found in the README and Day 63 found (and didn't find) in `.env.example`. Re-audited as of Day 66; each item below is either an open backlog task in `DAILY_ITERATIONS.md` or a candidate to be added.
 
-- **No retry / backoff on Kraken API.** A single 5xx aborts the relevant call. Days 18 to 19 of the backlog add `tenacity` retries and a rate limiter.
-- **No rate limiter.** The bot can exceed Kraken's per-IP limits during volatility.
-- **No kill switch.** Stopping the bot requires `systemctl stop`. Day 24 adds a file-based kill switch.
-- **No drawdown circuit breaker.** Only the linear daily-loss limit. Day 27 adds a 15% session drawdown breaker.
-- **No JSONL trade events.** Trade log is CSV; harder to query. Day 20 migrates to JSONL.
-- **No latency logging on API calls.** First sign of an upcoming Kraken outage is slowness; Day 22 adds it.
-- **No tests.** Days 9 to 13 cover scaffolding, three modules, and CI.
+- **No trailing stop.** Exits are two fixed percentages off the entry price (`STOP_LOSS_PCT`, `TAKE_PROFIT_PCT`) plus a max-age force-exit (Day 31) — nothing locks in gains as a position runs up. Entry is three independent catalyst-driven signals; exit is comparatively blunt. Flagged as the strategy's biggest asymmetry back in the Day 4 journal entry and still true today.
+- **No signal-driven exit on a held position whose catalyst has cleared.** The news layer can sell a held coin on a fresh `action: "sell"` signal, but nothing re-evaluates whether the *original* buy thesis is still valid — a position rides on stop-loss/take-profit/max-age alone once entered.
+- **Incomplete docstrings.** Day 3 covered `kraken_client.py` only; `heartbeat.py`, `kill_switch.py`, `listing_monitor.py`, `market_matcher.py`, `news_fetcher.py`, `positions.py`, `pump_detector.py`, and `trader.py` still have no module docstring.
+- **Incomplete type hints.** Days 15-16 covered `kraken_client.py` and `trader.py` only. `mypy --ignore-missing-imports` on `config.py` alone surfaces 3 real `Optional[str]`-into-`float()`/`int()` errors as of Day 66 — not just missing annotations, an actual latent type gap.
+- **No test for the Nitter 3-instance failover.** `news_fetcher.py` fails over across `nitter.poast.org` / `nitter.privacydev.net` / `nitter.1d4.us`, but nothing exercises the failover path — a partial outage's behavior is unverified.
+- **`requirements.txt` has no upper-bound pins.** Every dependency is `>=`, so a fresh install can silently pull a breaking major-version bump. `SECURITY.md`'s policy says to read the changelog before any upgrade, but nothing enforces that on first install.
+- **No automated positions.json ↔ Kraken reconciliation.** `SECURITY.md`'s incident-response runbook has this as a manual step during an incident; there's no day-to-day check that catches drift (a manual trade, a partial fill, state corruption) before it becomes an incident.
+- **Systemd unit not committed to the repo.** Day 56, still blocked on VPS SSH access this environment doesn't have.
 
 ## How to change strategy
 

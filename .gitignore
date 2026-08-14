@@ -13,5 +13,5 @@ trades_archive_*.jsonl
 positions.json
 seen_listings.json
 last_run.txt
-latest_status.json
+status.json
 KILL
