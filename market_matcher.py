@@ -1,3 +1,12 @@
+"""News/social signal extraction via Claude.
+
+Sends fetched headlines (news_fetcher.py) plus the list of Kraken-tradable
+coins to Claude, prompted to find headlines likely to cause a significant
+short-term price move and return `{coin, action, confidence, reasoning}`
+signals. Only signals at or above `MIN_CONFIDENCE` survive the local
+filter in `analyze_news_for_trades` — everything below that is logged
+nowhere, just dropped.
+"""
 import json
 import logging
 import anthropic

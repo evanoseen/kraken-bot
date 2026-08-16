@@ -1,3 +1,10 @@
+"""File-based kill switch (Day 24).
+
+Checked at the top of every trading cycle. `touch KILL` in the repo root
+halts trading within one cycle — no SSH, no systemctl. `rm KILL` resumes
+on the next cycle. `KILL` is gitignored; it's a runtime trigger, never
+shipped in a deploy.
+"""
 from __future__ import annotations
 
 from pathlib import Path

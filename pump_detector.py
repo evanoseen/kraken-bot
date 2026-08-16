@@ -1,3 +1,13 @@
+"""Obscure-coin volume-spike signal source.
+
+Scans every CAD-quoted Kraken pair each cycle and flags coins whose volume
+today is spiking vs. their 24h average AND whose price is up off the 24h
+low — while ignoring majors, stablecoins, already-popular memes, and coins
+geo-blocked for Ontario (`IGNORE_COINS`). Only considers tickers doing
+under $5M/day normally: the bot deliberately hunts unknown coins, not
+already-discovered ones. Confidence is derived from spike size in
+trader.py, not computed here.
+"""
 import logging
 
 logger = logging.getLogger(__name__)

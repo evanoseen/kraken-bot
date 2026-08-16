@@ -1,3 +1,11 @@
+"""Open-position state and trade logging.
+
+`positions.json` tracks currently-held buys (entry price, amount, timestamp)
+so the bot can recover state across restarts and check stop-loss/take-profit
+against the recorded entry. `log_trade` (Day 20) appends every executed
+trade to both `trades.csv` (legacy) and `trades.jsonl` (structured, one JSON
+object per line, queryable with jq).
+"""
 from __future__ import annotations
 
 import json

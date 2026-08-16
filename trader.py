@@ -1,3 +1,14 @@
+"""Cycle orchestrator — the bot's main trading logic.
+
+`run_trading_cycle` is the entry point called every `RUN_INTERVAL_MINUTES`:
+kill switch and balance/drawdown gates, exit checks on held positions
+(stop-loss/take-profit/max-age), the three signal sources (listing, pump,
+news) merged and deduplicated, every risk gate (blacklist, cooldown,
+per-coin cap, max open positions), confidence-scaled position sizing
+(`size_position`, Day 62), then order placement — real or dry-run. Full
+stage-by-stage detail lives in STRATEGY.md; this module is where every
+guardrail from the daily-iteration backlog actually gets wired together.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone

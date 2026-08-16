@@ -1,3 +1,14 @@
+"""News + Twitter/X headline fetcher.
+
+Blends six general crypto/meme RSS feeds with tweets from ~50 high-signal
+X accounts (market movers, exchange announcements, exchange CEOs, protocol
+founders, top callers, threat-intel handles) fetched via Nitter RSS —
+no API key needed. `NITTER_INSTANCES` gives automatic failover across
+three mirrors if the primary is down. `fetch_top_headlines` merges both
+sources (tweets prepended so Claude sees them first) and caps the total
+at `max_articles`; `format_headlines_for_prompt` renders the list for the
+Claude prompt in market_matcher.py.
+"""
 import feedparser
 import requests
 import logging

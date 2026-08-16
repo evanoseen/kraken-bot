@@ -1,3 +1,10 @@
+"""Liveness heartbeat file (Day 21).
+
+Writes the current UTC timestamp to `last_run.txt` at the end of every
+trading cycle. Answers "is the bot alive?" by reading one file instead of
+SSHing into the VPS or parsing logs — `scripts/check_heartbeat.py` (Day 61)
+reads it to fire a Telegram alert if it goes stale.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone

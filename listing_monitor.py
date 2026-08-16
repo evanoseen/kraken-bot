@@ -1,3 +1,13 @@
+"""New-listing signal source.
+
+Watches the Kraken blog RSS feed for announcement titles containing
+"NOW AVAILABLE", "LISTING", "LAUNCHES", or "TRADING NOW", and matches
+them against a hand-curated `WATCHLIST` of coins expected to list. A
+match returns the coin for an immediate buy — new Kraken listings
+reliably produce a 24-hour pump as the coin becomes accessible to
+Canadian/US retail. Seen announcement IDs persist to `seen_listings.json`
+so the same entry never fires twice.
+"""
 import feedparser
 import json
 import logging
