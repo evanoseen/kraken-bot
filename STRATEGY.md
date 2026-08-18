@@ -158,15 +158,28 @@ The `balance * 0.25` cap in the table above still applies on top of `size_positi
 
 ## Exit logic
 
-Exits are not signal-driven. Once a position is open, only two things can close it: a stop-loss trigger or a take-profit trigger. There is no time-based exit, no trailing stop, no manual sell-on-counter-signal, and the news layer cannot emit a sell on a coin already held that gets cleared on its own merits — sells from the news layer apply only to coins the bot currently holds.
+Exits are mostly not signal-driven. A position closes on a fixed threshold (stop-loss, take-profit, trailing stop, or max age) or, for coins the bot currently holds, a fresh LLM sell signal — there's no manual sell-on-counter-signal beyond that, and the news layer cannot emit a sell on a coin already held that gets cleared purely on its own merits.
 
 | Trigger | Condition | Action |
 |---------|-----------|--------|
+| Trailing stop (Day 69, opt-in) | Peak price since entry has moved above entry, AND `(peak_price - price) / peak_price >= TRAILING_STOP_PCT` | Market sell full position, log `sell_trailingstop`, remove position |
 | Stop loss | `(price - entry_price) / entry_price <= -STOP_LOSS_PCT` (default `-10%`) | Market sell full position, log `sell_stoploss`, remove position |
 | Take profit | `(price - entry_price) / entry_price >= TAKE_PROFIT_PCT` (default `+25%`) | Market sell full position, log `sell_takeprofit`, remove position |
+| Max age (Day 31) | Position held ≥ `MAX_POSITION_AGE_HOURS` (default `24h`), checked before all of the above | Market sell full position, log `sell_stale`, remove position |
 | News-driven sell | LLM emits `action: "sell"` for a held coin | Market sell, log `sell_signal`, remove position |
 
-Positions are persisted in `positions.json` (`positions.py`) so the bot can recover state after a restart. Trade history is appended to `trades.csv`.
+### Trailing stop vs. fixed stop-loss/take-profit (Day 69)
+
+`TRAILING_STOP_PCT` is unset by default — with it unset, behavior is unchanged from before Day 69: only the fixed stop-loss and take-profit thresholds apply, both measured off the entry price.
+
+When set, `trader.check_exit_conditions` tracks the highest price seen since entry (`peak_price`, persisted in `positions.json` via `positions.update_peak_price`) and checks the trailing-stop condition **before** the fixed stop-loss/take-profit check, in the same pass:
+
+- **Only evaluated once the peak has moved above entry.** A position that has only ever gone down has `peak_price == entry_price`, so the trailing-stop check is skipped entirely and falls through to the ordinary entry-price stop-loss — this avoids the trailing stop silently becoming a second, differently-thresholded stop-loss for a position that never ran up.
+- **Can fire while a position is still net profitable.** A coin that ran up 20% and has since given back 8% off that peak is still +10.4% vs. entry — well inside the default 10% stop-loss band — but the trailing stop exits it anyway, locking in the gain instead of waiting to see if the fixed stop-loss or take-profit eventually catches it.
+- **Takes priority over stop-loss/take-profit when it fires.** If the trailing-stop condition is met, the cycle exits that check and moves to the next held coin — the fixed thresholds are not also evaluated that cycle for the same position.
+- **Independent of take-profit.** `TAKE_PROFIT_PCT` still exits at a fixed target off entry regardless of how the trailing stop is configured; the two aren't mutually exclusive; whichever condition the price satisfies first (chronologically, across cycles) wins.
+
+Positions are persisted in `positions.json` (`positions.py`) so the bot can recover state after a restart. Trade history is appended to `trades.csv` and `trades.jsonl`.
 
 ---
 
@@ -184,10 +197,7 @@ Positions are persisted in `positions.json` (`positions.py`) so the bot can reco
 
 This list is honest, not a roadmap. It was last true around Day 13 — retry/backoff, a rate limiter, the kill switch, the drawdown breaker, JSONL trade events, latency logging, and the test suite itself all shipped since (Days 18-53) and this section never got updated to say so, which is exactly the kind of drift Day 64 found in the README and Day 63 found (and didn't find) in `.env.example`. Re-audited as of Day 66; each item below is either an open backlog task in `DAILY_ITERATIONS.md` or a candidate to be added.
 
-- **No trailing stop.** Exits are two fixed percentages off the entry price (`STOP_LOSS_PCT`, `TAKE_PROFIT_PCT`) plus a max-age force-exit (Day 31) — nothing locks in gains as a position runs up. Entry is three independent catalyst-driven signals; exit is comparatively blunt. Flagged as the strategy's biggest asymmetry back in the Day 4 journal entry and still true today.
-- **No signal-driven exit on a held position whose catalyst has cleared.** The news layer can sell a held coin on a fresh `action: "sell"` signal, but nothing re-evaluates whether the *original* buy thesis is still valid — a position rides on stop-loss/take-profit/max-age alone once entered.
-- **Incomplete docstrings.** Day 3 covered `kraken_client.py` only; `heartbeat.py`, `kill_switch.py`, `listing_monitor.py`, `market_matcher.py`, `news_fetcher.py`, `positions.py`, `pump_detector.py`, and `trader.py` still have no module docstring.
-- **Incomplete type hints.** Days 15-16 covered `kraken_client.py` and `trader.py` only. `mypy --ignore-missing-imports` on `config.py` alone surfaces 3 real `Optional[str]`-into-`float()`/`int()` errors as of Day 66 — not just missing annotations, an actual latent type gap.
+- **No signal-driven exit on a held position whose catalyst has cleared.** The news layer can sell a held coin on a fresh `action: "sell"` signal, but nothing re-evaluates whether the *original* buy thesis is still valid — a position rides on stop-loss/take-profit/trailing-stop/max-age alone once entered.
 - **No test for the Nitter 3-instance failover.** `news_fetcher.py` fails over across `nitter.poast.org` / `nitter.privacydev.net` / `nitter.1d4.us`, but nothing exercises the failover path — a partial outage's behavior is unverified.
 - **`requirements.txt` has no upper-bound pins.** Every dependency is `>=`, so a fresh install can silently pull a breaking major-version bump. `SECURITY.md`'s policy says to read the changelog before any upgrade, but nothing enforces that on first install.
 - **No automated positions.json ↔ Kraken reconciliation.** `SECURITY.md`'s incident-response runbook has this as a manual step during an incident; there's no day-to-day check that catches drift (a manual trade, a partial fill, state corruption) before it becomes an incident.

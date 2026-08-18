@@ -36,6 +36,7 @@ EXPECTED_FIELDS = {
     "min_trade_amount",
     "profit_target",
     "trade_cooldown_minutes",
+    "trailing_stop_pct",
     "balance_alert_threshold",
     "telegram_bot_token",
     "telegram_chat_id",

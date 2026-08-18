@@ -58,6 +58,7 @@ class Config:
     take_profit_pct: float
     max_position_age_hours: float
     min_hold_minutes: float
+    trailing_stop_pct: Optional[float]
 
     # Cadence
     run_interval_minutes: int
@@ -91,6 +92,7 @@ class Config:
             take_profit_pct=float(os.getenv("TAKE_PROFIT_PCT", "0.25")),
             max_position_age_hours=float(os.getenv("MAX_POSITION_AGE_HOURS", "24")),
             min_hold_minutes=float(os.getenv("MIN_HOLD_MINUTES", "0")),
+            trailing_stop_pct=float(v) if (v := os.getenv("TRAILING_STOP_PCT")) else None,
             run_interval_minutes=int(os.getenv("RUN_INTERVAL_MINUTES", "15")),
             trade_cooldown_minutes=float(os.getenv("TRADE_COOLDOWN_MINUTES", "60")),
             dry_run=os.getenv("DRY_RUN", "true").lower() == "true",

@@ -53,6 +53,7 @@ def _build_message(
         "sell_stoploss": "STOP-LOSS",
         "sell_takeprofit": "TAKE-PROFIT",
         "sell_stale": "STALE EXIT",
+        "sell_trailingstop": "TRAILING STOP",
         "balance_alert": "LOW BALANCE WARNING",
     }
     label = icons.get(action, action.upper())

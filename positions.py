@@ -57,6 +57,20 @@ def remove_position(coin: str):
     save_positions(positions)
 
 
+def update_peak_price(coin: str, peak_price: float) -> None:
+    """Persist the highest price observed since entry (Day 69 trailing stop).
+
+    Only written when `TRAILING_STOP_PCT` is set — positions opened while
+    the feature is disabled simply have no `peak_price` key, and callers
+    fall back to `entry_price` in that case. No-op if the position no
+    longer exists (e.g. sold on a concurrent-ish path).
+    """
+    positions = load_positions()
+    if coin in positions:
+        positions[coin]["peak_price"] = peak_price
+        save_positions(positions)
+
+
 def get_position(coin: str) -> dict | None:
     return load_positions().get(coin)
 

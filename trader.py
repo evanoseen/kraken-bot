@@ -26,7 +26,7 @@ from cooldown import is_on_cooldown, mark_traded
 from signals import deduplicate
 from kill_switch import kill_switch_active
 from notifier import notify_trade
-from positions import record_buy, remove_position, get_position, log_trade
+from positions import record_buy, remove_position, get_position, log_trade, update_peak_price
 from blacklist import is_blacklisted
 from coin_trade_counter import at_cap as coin_at_cap, increment as coin_increment
 from trade_logger import append_trade as csv_log
@@ -107,6 +107,42 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                     continue
             except ValueError:
                 pass
+
+        # Trailing stop (Day 69): tracks the highest price seen since entry
+        # and exits if price falls TRAILING_STOP_PCT off that peak. Disabled
+        # by default (TRAILING_STOP_PCT unset). Only evaluated once the peak
+        # has actually moved above entry — a position that never ran up
+        # falls through to the ordinary entry-price stop-loss below instead
+        # of double-triggering off a peak that equals its entry price.
+        if cfg.trailing_stop_pct is not None:
+            peak_price = max(position.get("peak_price", entry_price), price)
+            if peak_price != position.get("peak_price"):
+                update_peak_price(coin, peak_price)
+
+            if peak_price > entry_price:
+                drop_from_peak = (peak_price - price) / peak_price
+                if drop_from_peak >= cfg.trailing_stop_pct:
+                    logger.warning(
+                        f"TRAILING STOP triggered: {coin} | "
+                        f"peak ${peak_price:.8f} → now ${price:.8f} "
+                        f"(-{drop_from_peak*100:.1f}% off peak) | P&L: ${pnl:.2f} CAD"
+                    )
+                    if not cfg.dry_run:
+                        result = place_order(client, coin, "sell", current_value, price)
+                        if result:
+                            log_trade(coin, "sell_trailingstop", price, current_value, pnl)
+                            csv_log(coin, "sell_trailingstop", current_value, price, pnl=pnl)
+                            remove_position(coin)
+                            notify_trade("sell_trailingstop", coin, current_value, price, pnl=pnl)
+                            mark_traded(coin)
+                            if pnl >= 0:
+                                _wins += 1
+                            else:
+                                _losses += 1
+                            logger.info(f"Trailing stop executed for {coin} | P&L: ${pnl:.2f}")
+                    else:
+                        logger.info(f"[DRY RUN] Would trailing-stop sell {coin} | P&L: ${pnl:.2f}")
+                    continue
 
         if pct_change <= -cfg.stop_loss_pct:
             logger.warning(
