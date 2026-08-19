@@ -157,3 +157,113 @@ def test_feedparser_exception_does_not_crash(patched_news_fetcher):
     # At least the survivor came through; no exception escaped.
     titles = [a["title"] for a in articles]
     assert "Survivor headline" in titles
+
+
+# ─── Day 70: Nitter 3-instance failover in fetch_twitter_signals ───────────
+#
+# Every test above stubs fetch_twitter_signals to [] — the failover path
+# across NITTER_INSTANCES has never actually been exercised. These tests
+# call fetch_twitter_signals directly, patching TWITTER_ACCOUNTS to a short
+# fixed list (real code loops over ~50 accounts, which would need a mocked
+# response per account per instance) and feedparser.parse to a URL-aware
+# side_effect that simulates a specific instance being down.
+
+
+def test_single_instance_failure_falls_through(mocker):
+    """First Nitter instance raises; the second one has the headline."""
+    import news_fetcher as nf
+    mocker.patch.object(nf, "TWITTER_ACCOUNTS", ["testuser"])
+
+    def fake_parse(url):
+        if "nitter.poast.org" in url:
+            raise ConnectionError("simulated instance down")
+        if "nitter.privacydev.net" in url:
+            return _fake_feed([{"title": "Fallback headline from second instance", "summary": ""}])
+        raise AssertionError(f"should not reach third instance: {url}")
+
+    mocker.patch("news_fetcher.feedparser.parse", side_effect=fake_parse)
+
+    articles = nf.fetch_twitter_signals()
+
+    assert len(articles) == 1
+    assert "Fallback headline from second instance" in articles[0]["title"]
+    assert articles[0]["source"] == "twitter"
+
+
+def test_cascading_failure_falls_through_to_third_instance(mocker):
+    """First two instances down (timeout, connection error); third survives."""
+    import news_fetcher as nf
+    mocker.patch.object(nf, "TWITTER_ACCOUNTS", ["testuser"])
+
+    def fake_parse(url):
+        if "nitter.poast.org" in url:
+            raise TimeoutError("simulated timeout")
+        if "nitter.privacydev.net" in url:
+            raise ConnectionError("simulated 5xx-like failure")
+        if "nitter.1d4.us" in url:
+            return _fake_feed([{"title": "Third instance survivor headline", "summary": ""}])
+        raise AssertionError(f"unexpected url: {url}")
+
+    mocker.patch("news_fetcher.feedparser.parse", side_effect=fake_parse)
+
+    articles = nf.fetch_twitter_signals()
+
+    assert len(articles) == 1
+    assert "Third instance survivor headline" in articles[0]["title"]
+
+
+def test_empty_entries_without_exception_also_falls_through(mocker):
+    """An instance that responds with zero entries (no exception) is
+    treated the same as a failure — falls through to the next instance."""
+    import news_fetcher as nf
+    mocker.patch.object(nf, "TWITTER_ACCOUNTS", ["testuser"])
+
+    def fake_parse(url):
+        if "nitter.poast.org" in url:
+            return _fake_feed([])  # responds, but nothing there
+        if "nitter.privacydev.net" in url:
+            return _fake_feed([{"title": "Second instance had actual content", "summary": ""}])
+        raise AssertionError(f"should not reach third instance: {url}")
+
+    mocker.patch("news_fetcher.feedparser.parse", side_effect=fake_parse)
+
+    articles = nf.fetch_twitter_signals()
+
+    assert len(articles) == 1
+    assert "Second instance had actual content" in articles[0]["title"]
+
+
+def test_all_instances_down_for_one_account_degrades_gracefully(mocker, caplog):
+    """One account's all three instances fail; a second account still
+    comes through, and nothing crashes."""
+    import logging
+    import news_fetcher as nf
+    mocker.patch.object(nf, "TWITTER_ACCOUNTS", ["deadaccount", "goodaccount"])
+
+    def fake_parse(url):
+        if "deadaccount" in url:
+            raise ConnectionError("simulated total outage for this account")
+        if "goodaccount" in url and "nitter.poast.org" in url:
+            return _fake_feed([{"title": "Good account headline survives", "summary": ""}])
+        raise AssertionError(f"unexpected url: {url}")
+
+    mocker.patch("news_fetcher.feedparser.parse", side_effect=fake_parse)
+
+    with caplog.at_level(logging.DEBUG, logger="news_fetcher"):
+        articles = nf.fetch_twitter_signals()
+
+    assert len(articles) == 1
+    assert "Good account headline survives" in articles[0]["title"]
+    assert "deadaccount" in caplog.text
+
+
+def test_all_accounts_all_instances_down_returns_empty(mocker):
+    """Total Nitter outage across every instance and every account degrades
+    to an empty list — it must not crash or raise."""
+    import news_fetcher as nf
+    mocker.patch.object(nf, "TWITTER_ACCOUNTS", ["acct1", "acct2"])
+    mocker.patch("news_fetcher.feedparser.parse", side_effect=ConnectionError("simulated total nitter outage"))
+
+    articles = nf.fetch_twitter_signals()
+
+    assert articles == []
