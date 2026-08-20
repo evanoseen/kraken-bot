@@ -186,6 +186,30 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager | 
 
 `requests` and `python-dotenv` are the two that matter for the live bot; both are already pinned to `>=` their latest available version, so there's nothing more to do until upstream ships an actual fix.
 
+### Upper-bound pins (Day 71)
+
+Before Day 71, every line in `requirements.txt` was `package>=X.Y.Z` with no ceiling — a fresh install (a new machine, a rebuilt VPS, CI's own `pip install`) could silently pull a breaking major-version bump with zero warning, even though this section already said to read the changelog before any upgrade. The policy existed; nothing enforced it on first install. That's now fixed: every line has both a lower and an upper bound.
+
+**Bound convention:** one major version above whatever's currently installed (`package>=X.Y.Z,<(X+1).0.0`) — except pre-1.0 packages (currently only `anthropic`, at `0.105.2`), which get bounded at the next **minor** instead (`<0.106.0`), since SemVer treats any `0.x` release as potentially breaking, not just a major bump. `types-requests` is bounded to match `requests`' major, since its version scheme mirrors the package it stubs.
+
+**Bump procedure** — one dependency per commit, never batch:
+```bash
+# 1. Check what's actually available before editing anything
+pip index versions <package>
+
+# 2. Bump ONLY that package's version bounds in requirements.txt
+#    (lower bound to the new version, or leave it — upper bound per the
+#    convention above if you're also crossing a major/minor boundary)
+
+# 3. Reinstall and verify
+pip install -r requirements.txt
+make test
+
+# 4. Commit with the package and version in the message
+git commit -m "Bump requests to 2.33.0"
+```
+If `make test` fails after a bump, that's the changelog-reading step this policy has always asked for, just enforced by the test suite instead of trusted to memory — read what changed, decide whether it's a real break or a test that needs updating, and fix accordingly before committing.
+
 ### Concrete actions
 ```bash
 # 1. Install pip-audit if not already
@@ -199,11 +223,11 @@ pip-audit -r requirements.txt
 pip install --dry-run -r requirements.txt
 # Read the resolver output. Reject any package whose name does not match what you expect.
 
-# 4. Upgrade workflow (single dep at a time)
+# 4. Upgrade workflow (single dep at a time) — see "Upper-bound pins" above for the full procedure
 pip-audit -r requirements.txt          # baseline
 # edit requirements.txt to bump one version
 pip install -r requirements.txt
-pytest                                  # confirm nothing broke (once Day 9-13 tests land)
+make test                               # full suite — 300+ tests as of Day 71
 git diff requirements.txt               # commit the diff
 
 # 5. Cron a monthly audit on the VPS (or run before every deploy)
