@@ -1,0 +1,9 @@
+[run]
+omit =
+    tests/*
+    venv/*
+    */site-packages/*
+
+[report]
+skip_covered = False
+show_missing = True

@@ -4,20 +4,27 @@ VENV   := venv/bin
 SERVER := root@204.168.204.221
 REMOTE_DIR := /root/kraken-bot
 
-.PHONY: help test run dry deploy logs restart status
+.PHONY: help test coverage run dry deploy logs restart status
 
 help:
 	@echo "kraken-bot make targets:"
-	@echo "  make test     run the pytest suite"
-	@echo "  make run      run the bot (scheduler loop, live .env)"
-	@echo "  make dry      run a single cycle with --once --dry-run"
-	@echo "  make deploy   test, rsync to the VPS (excludes .env), restart, verify heartbeat"
-	@echo "  make logs     tail the last 50 journalctl lines on the VPS"
-	@echo "  make restart  restart the systemd service on the VPS"
-	@echo "  make status   show systemd status on the VPS"
+	@echo "  make test      run the pytest suite"
+	@echo "  make coverage  run the suite with a per-file coverage report (Day 72)"
+	@echo "  make run       run the bot (scheduler loop, live .env)"
+	@echo "  make dry       run a single cycle with --once --dry-run"
+	@echo "  make deploy    test, rsync to the VPS (excludes .env), restart, verify heartbeat"
+	@echo "  make logs      tail the last 50 journalctl lines on the VPS"
+	@echo "  make restart   restart the systemd service on the VPS"
+	@echo "  make status    show systemd status on the VPS"
 
 test:
 	$(VENV)/python3 -m pytest -q
+
+# Day 72: bot source only — tests/, venv/, and site-packages excluded via
+# .coveragerc so the report reflects what the *bot* exercises, not the
+# near-100%-self-covering test files themselves.
+coverage:
+	$(VENV)/python3 -m pytest --cov=. --cov-report=term-missing -q
 
 run:
 	$(VENV)/python3 main.py
