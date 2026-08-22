@@ -29,6 +29,7 @@ def _make_cfg(mocker, **overrides):
     cfg = mocker.Mock(**defaults)
     for k, v in defaults.items():
         setattr(cfg, k, v)
+    cfg.validate = mocker.Mock(return_value=None)  # valid by default; override per-test
     return cfg
 
 
@@ -79,3 +80,41 @@ def test_banner_shows_telegram_on_when_token_set(mocker, caplog):
         health.run_checks(cfg)
     assert "telegram" in caplog.text.lower()
     assert "on" in caplog.text
+
+
+# ── Day 73: Config.validate() wiring ────────────────────────────────────────
+
+def test_exits_on_invalid_config(mocker):
+    cfg = _make_cfg(mocker)
+    cfg.validate.side_effect = ValueError("MIN_TRADE_AMOUNT (50.0) must be <= MAX_TRADE_AMOUNT (25.0)")
+    mocker.patch("health._check_kraken_connectivity", return_value=True)
+    with pytest.raises(SystemExit) as exc:
+        health.run_checks(cfg)
+    assert exc.value.code == 1
+
+
+def test_invalid_config_error_is_logged(mocker, caplog):
+    cfg = _make_cfg(mocker)
+    cfg.validate.side_effect = ValueError("MIN_CONFIDENCE must be between 0 and 1 (got 5.0)")
+    mocker.patch("health._check_kraken_connectivity", return_value=True)
+    with caplog.at_level(logging.ERROR, logger="health"):
+        with pytest.raises(SystemExit):
+            health.run_checks(cfg)
+    assert "MIN_CONFIDENCE" in caplog.text
+
+
+def test_invalid_config_short_circuits_before_connectivity_check(mocker):
+    """A bad config shouldn't waste a network call before failing."""
+    cfg = _make_cfg(mocker)
+    cfg.validate.side_effect = ValueError("bad config")
+    connectivity = mocker.patch("health._check_kraken_connectivity", return_value=True)
+    with pytest.raises(SystemExit):
+        health.run_checks(cfg)
+    connectivity.assert_not_called()
+
+
+def test_valid_config_does_not_exit(mocker):
+    cfg = _make_cfg(mocker)  # cfg.validate is a no-op Mock by default
+    mocker.patch("health._check_kraken_connectivity", return_value=True)
+    health.run_checks(cfg)  # should not raise
+    cfg.validate.assert_called_once()

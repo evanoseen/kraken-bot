@@ -72,6 +72,13 @@ def run_checks(cfg) -> None:
         logger.error("Set them in .env and restart the bot.")
         sys.exit(1)
 
+    try:
+        cfg.validate()
+    except ValueError as exc:
+        logger.error(str(exc))
+        logger.error("Fix these in .env and restart the bot.")
+        sys.exit(1)
+
     logger.info("Checking Kraken connectivity...")
     if _check_kraken_connectivity():
         logger.info("Kraken API reachable.")

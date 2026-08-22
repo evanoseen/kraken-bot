@@ -67,6 +67,67 @@ class Config:
     # Master switch
     dry_run: bool
 
+    def validate(self) -> None:
+        """Raise ValueError if any tunable is out of range or contradictory (Day 73).
+
+        `from_env()` casts every value to its declared type, but casting
+        doesn't catch nonsense — `MIN_TRADE_AMOUNT > MAX_TRADE_AMOUNT` loads
+        fine and then silently produces a broken `size_position()` curve;
+        a negative `STOP_LOSS_PCT` loads fine and then never triggers.
+        Collects every violation instead of raising on the first one, so a
+        misconfigured `.env` gets fixed in one pass instead of one error at
+        a time. Called from `health.run_checks()` at startup, before any
+        trading cycle runs.
+        """
+        errors: list[str] = []
+
+        if self.min_trade_amount <= 0:
+            errors.append(f"MIN_TRADE_AMOUNT must be > 0 (got {self.min_trade_amount})")
+        if self.max_trade_amount <= 0:
+            errors.append(f"MAX_TRADE_AMOUNT must be > 0 (got {self.max_trade_amount})")
+        if self.min_trade_amount > self.max_trade_amount:
+            errors.append(
+                f"MIN_TRADE_AMOUNT ({self.min_trade_amount}) must be <= "
+                f"MAX_TRADE_AMOUNT ({self.max_trade_amount})"
+            )
+        if not (0.0 <= self.min_confidence <= 1.0):
+            errors.append(f"MIN_CONFIDENCE must be between 0 and 1 (got {self.min_confidence})")
+        if self.daily_loss_limit <= 0:
+            errors.append(f"DAILY_LOSS_LIMIT must be > 0 (got {self.daily_loss_limit})")
+        if not (0.0 < self.max_drawdown_pct <= 1.0):
+            errors.append(f"MAX_DRAWDOWN_PCT must be between 0 (exclusive) and 1 (got {self.max_drawdown_pct})")
+        if self.max_open_positions <= 0:
+            errors.append(f"MAX_OPEN_POSITIONS must be > 0 (got {self.max_open_positions})")
+        if self.max_trades_per_day <= 0:
+            errors.append(f"MAX_TRADES_PER_DAY must be > 0 (got {self.max_trades_per_day})")
+        if not (0.0 < self.stop_loss_pct <= 1.0):
+            errors.append(f"STOP_LOSS_PCT must be between 0 (exclusive) and 1 (got {self.stop_loss_pct})")
+        if self.take_profit_pct <= 0:
+            errors.append(f"TAKE_PROFIT_PCT must be > 0 (got {self.take_profit_pct})")
+        if self.max_position_age_hours <= 0:
+            errors.append(f"MAX_POSITION_AGE_HOURS must be > 0 (got {self.max_position_age_hours})")
+        if self.min_hold_minutes < 0:
+            errors.append(f"MIN_HOLD_MINUTES must be >= 0 (got {self.min_hold_minutes})")
+        if self.run_interval_minutes <= 0:
+            errors.append(f"RUN_INTERVAL_MINUTES must be > 0 (got {self.run_interval_minutes})")
+        if self.trade_cooldown_minutes < 0:
+            errors.append(f"TRADE_COOLDOWN_MINUTES must be >= 0 (got {self.trade_cooldown_minutes})")
+        if self.min_balance_reserve < 0:
+            errors.append(f"MIN_BALANCE_RESERVE must be >= 0 (got {self.min_balance_reserve})")
+        if self.trailing_stop_pct is not None and not (0.0 < self.trailing_stop_pct <= 1.0):
+            errors.append(
+                f"TRAILING_STOP_PCT must be between 0 (exclusive) and 1 if set (got {self.trailing_stop_pct})"
+            )
+        if self.profit_target is not None and self.profit_target <= 0:
+            errors.append(f"PROFIT_TARGET must be > 0 if set (got {self.profit_target})")
+        if self.balance_alert_threshold is not None and self.balance_alert_threshold < 0:
+            errors.append(f"BALANCE_ALERT_THRESHOLD must be >= 0 if set (got {self.balance_alert_threshold})")
+        if self.max_trades_per_coin is not None and self.max_trades_per_coin <= 0:
+            errors.append(f"MAX_TRADES_PER_COIN must be > 0 if set (got {self.max_trades_per_coin})")
+
+        if errors:
+            raise ValueError("Invalid configuration:\n  " + "\n  ".join(errors))
+
     @classmethod
     def from_env(cls) -> "Config":
         """Load every field from the process environment, falling back to .env via dotenv."""
