@@ -145,3 +145,46 @@ def test_heartbeat_missing_sends_missing_message(telegram_env, mocker):
 def test_heartbeat_stale_network_error_is_non_fatal(telegram_env, mocker):
     mocker.patch("notifier.requests.post", side_effect=requests.ConnectionError("offline"))
     notifier.notify_heartbeat_stale(60.0, 30.0)
+
+
+def test_reconciliation_no_op_when_token_missing(monkeypatch, mocker):
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    post = mocker.patch("notifier.requests.post")
+    notifier.notify_reconciliation_mismatch(["DOGE"], [])
+    post.assert_not_called()
+
+
+def test_reconciliation_reports_only_in_kraken(telegram_env, mocker):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = True
+    post = mocker.patch("notifier.requests.post", return_value=mock_resp)
+    notifier.notify_reconciliation_mismatch(["DOGE", "SHIB"], [])
+    payload = post.call_args.kwargs["json"]
+    assert "Held on Kraken, not tracked: DOGE, SHIB" in payload["text"]
+    assert "Tracked, not held on Kraken" not in payload["text"]
+
+
+def test_reconciliation_reports_only_in_positions(telegram_env, mocker):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = True
+    post = mocker.patch("notifier.requests.post", return_value=mock_resp)
+    notifier.notify_reconciliation_mismatch([], ["PEPE"])
+    payload = post.call_args.kwargs["json"]
+    assert "Tracked, not held on Kraken: PEPE" in payload["text"]
+    assert "Held on Kraken, not tracked" not in payload["text"]
+
+
+def test_reconciliation_reports_both_directions(telegram_env, mocker):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = True
+    post = mocker.patch("notifier.requests.post", return_value=mock_resp)
+    notifier.notify_reconciliation_mismatch(["DOGE"], ["PEPE"])
+    payload = post.call_args.kwargs["json"]
+    assert "Held on Kraken, not tracked: DOGE" in payload["text"]
+    assert "Tracked, not held on Kraken: PEPE" in payload["text"]
+
+
+def test_reconciliation_network_error_is_non_fatal(telegram_env, mocker):
+    mocker.patch("notifier.requests.post", side_effect=requests.ConnectionError("offline"))
+    notifier.notify_reconciliation_mismatch(["DOGE"], [])

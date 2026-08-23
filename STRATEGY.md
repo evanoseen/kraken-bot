@@ -199,7 +199,6 @@ This list is honest, not a roadmap. It was last true around Day 13 — retry/bac
 
 - **No signal-driven exit on a held position whose catalyst has cleared.** The news layer can sell a held coin on a fresh `action: "sell"` signal, but nothing re-evaluates whether the *original* buy thesis is still valid — a position rides on stop-loss/take-profit/trailing-stop/max-age alone once entered.
 - **No test for the Nitter 3-instance failover.** `news_fetcher.py` fails over across `nitter.poast.org` / `nitter.privacydev.net` / `nitter.1d4.us`, but nothing exercises the failover path — a partial outage's behavior is unverified.
-- **No automated positions.json ↔ Kraken reconciliation.** `SECURITY.md`'s incident-response runbook has this as a manual step during an incident; there's no day-to-day check that catches drift (a manual trade, a partial fill, state corruption) before it becomes an incident.
 - **Systemd unit not committed to the repo.** Day 56, still blocked on VPS SSH access this environment doesn't have.
 
 ## How to change strategy

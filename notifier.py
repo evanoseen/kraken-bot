@@ -140,6 +140,35 @@ def notify_heartbeat_stale(age_minutes: Optional[float], threshold_minutes: floa
         logger.warning("Telegram heartbeat alert error (non-fatal): %s", exc)
 
 
+def notify_reconciliation_mismatch(only_in_kraken: list[str], only_in_positions: list[str]) -> None:
+    """Telegram alert when positions.json and live Kraken holdings disagree
+    (Day 74) — a manual trade, a partial fill, or state corruption caught
+    proactively instead of during an incident. Fail-soft, same pattern as
+    the other notify_* functions."""
+    token = _token()
+    chat_id = _chat_id()
+    if not token or not chat_id:
+        return
+
+    lines = ["kraken-bot POSITIONS MISMATCH"]
+    if only_in_kraken:
+        lines.append(f"Held on Kraken, not tracked: {', '.join(only_in_kraken)}")
+    if only_in_positions:
+        lines.append(f"Tracked, not held on Kraken: {', '.join(only_in_positions)}")
+    text = "\n".join(lines)
+
+    try:
+        resp = requests.post(
+            _API_URL.format(token=token),
+            json={"chat_id": chat_id, "text": text},
+            timeout=_TIMEOUT,
+        )
+        if not resp.ok:
+            logger.warning("Telegram reconciliation alert failed (%s): %s", resp.status_code, resp.text[:120])
+    except Exception as exc:
+        logger.warning("Telegram reconciliation alert error (non-fatal): %s", exc)
+
+
 def notify_trade(
     action: str,
     coin: str,

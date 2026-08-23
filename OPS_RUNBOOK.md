@@ -194,6 +194,26 @@ Install with `crontab -e` on the local machine (not the VPS). If the SSH pull it
 
 `ssh`-ing to fetch a single file every 10 minutes is deliberately simple over building a push-based agent — one dependency (SSH, already required for everything else in this runbook) instead of two.
 
+### Positions reconciliation (Day 74)
+
+The incident-response runbook (section 6) has always said to compare `positions.json` against the Kraken account ledger — but only as a manual step, during an incident. `scripts/reconcile_positions.py` does the same comparison proactively: it fetches live Kraken holdings, diffs them against `positions.json`, and Telegram-alerts on any coin held on one side but not the other (a manual trade, a partial fill, state corruption).
+
+**Unlike `check_heartbeat.py`, this must run ON the VPS** (or anywhere with the real `KRAKEN_API_KEY`/`KRAKEN_PRIVATE_KEY`) — it needs live authenticated Kraken access, not just a file read over SSH.
+
+```bash
+# One-shot check
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/reconcile_positions.py'
+
+# Print only, skip the Telegram alert (e.g. for a manual spot-check)
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/reconcile_positions.py --no-alert'
+```
+
+**Suggested daily cron on the VPS:**
+```cron
+0 6 * * * cd /root/kraken-bot && venv/bin/python3 scripts/reconcile_positions.py >> /root/kraken-bot/reconcile.log 2>&1
+```
+Install with `ssh root@204.168.204.221 'crontab -e'`. A mismatch alert doesn't necessarily mean something is wrong — a manual trade made outside the bot is expected to show up this way — but it's the earliest possible signal that `positions.json` and reality have diverged, whatever the cause.
+
 ---
 
 ## 4. Deploy procedure
