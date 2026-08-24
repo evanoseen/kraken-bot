@@ -184,7 +184,7 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager | 
 | GHSA-6v7p-g79w-8964 | msgpack | 1.1.2 | No — transitive via `pip-audit`'s own CI-only dependency (`CacheControl`), not installed on the VPS | Every audit |
 | PYSEC-2026-1375, PYSEC-2026-1374 | filelock | 3.19.1 | No — transitive via `pip-audit`, CI-only | Every audit |
 
-`requests` and `python-dotenv` are the two that matter for the live bot; both are already pinned to `>=` their latest available version, so there's nothing more to do until upstream ships an actual fix.
+`requests` and `python-dotenv` are the two that matter for the live bot; both are already pinned to their latest available version as the lower bound (with an upper bound added Day 71), so there's nothing more to do until upstream ships an actual fix.
 
 ### Upper-bound pins (Day 71)
 
@@ -227,7 +227,7 @@ pip install --dry-run -r requirements.txt
 pip-audit -r requirements.txt          # baseline
 # edit requirements.txt to bump one version
 pip install -r requirements.txt
-make test                               # full suite — 300+ tests as of Day 71
+make test                               # full suite must stay green
 git diff requirements.txt               # commit the diff
 
 # 5. Cron a monthly audit on the VPS (or run before every deploy)
@@ -269,6 +269,9 @@ ssh root@204.168.204.221 'journalctl -u kraken-bot --since "24 hours ago" --no-p
 ssh root@204.168.204.221 'cat /root/kraken-bot/bot.log'                                > bot.log
 ssh root@204.168.204.221 'cat /root/kraken-bot/positions.json'                         > positions.json
 ssh root@204.168.204.221 'cat /root/kraken-bot/trades.csv'                             > trades.csv
+ssh root@204.168.204.221 'cat /root/kraken-bot/trades.jsonl'                           > trades.jsonl
+ssh root@204.168.204.221 'cat /root/kraken-bot/status.json'                            > status.json
+ssh root@204.168.204.221 'cat /root/kraken-bot/reconcile.log 2>/dev/null'              > reconcile.log
 ssh root@204.168.204.221 'last -n 50'                                                  > logins.log
 ssh root@204.168.204.221 'ps auxf'                                                     > processes.txt
 ssh root@204.168.204.221 'ss -tnlp'                                                    > listening_ports.txt
@@ -279,6 +282,7 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager'  
 ```
 
 #### Phase 3 — INVESTIGATE
+- Fast first pass: `scripts/reconcile_positions.py --no-alert` (Day 74) diffs live Kraken holdings against `positions.json` in one command instead of eyeballing a CSV export — start here, then use the full ledger export below for anything it flags.
 - Compare `positions.json` to the Kraken ledger export. Any trades on Kraken that the bot did not record are evidence of a compromise (keys leaked) or a manual trade you forgot.
 - Search `journal.log` for unexpected coins, oversized orders, or sells you did not authorize.
 - Search `logins.log` and `ssh.log` for SSH sessions from unknown IPs.
@@ -287,7 +291,7 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager'  
 #### Phase 4 — RECOVER
 - If keys were compromised: rotate (see section 2), re-deploy, then re-enable trading.
 - If code was compromised: roll back to a known-good commit (see [OPS_RUNBOOK.md](OPS_RUNBOOK.md) section 5).
-- If positions diverged from `positions.json`: edit the file to match Kraken reality before re-enabling.
+- If positions diverged from `positions.json`: edit the file to match Kraken reality, then confirm with `scripts/reconcile_positions.py --no-alert` before re-enabling.
 - Write a postmortem in `JOURNAL.md` covering: timeline, root cause, what worked in this response, what to add to the threat model. Treat the postmortem as required, not optional.
 - Re-enable trading by setting `DRY_RUN=false` and `systemctl restart kraken-bot`. Watch one full cycle before stepping away.
 
@@ -295,7 +299,7 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager'  
 
 ## Hardening backlog
 
-Everything originally listed here — the `KILL` switch, retry/rate-limiter, drawdown circuit breaker, JSONL trade log, status file, and trade notifications — has shipped (Days 18-28 range; see `DAILY_ITERATIONS.md` and `JOURNAL.md` for specifics). One item remains open:
+Everything originally listed here has shipped: retry/rate-limiter (Days 18-19), the `KILL` switch (Day 24), drawdown circuit breaker (Day 27), JSONL trade log (Day 20), status file (Day 45), trade notifications (Day 26, extended by shutdown alerts Day 52, stale-heartbeat alerts Day 61, and reconciliation-mismatch alerts Day 74). See `DAILY_ITERATIONS.md` and `JOURNAL.md` for the day-by-day record. One item remains open:
 
 - **Systemd unit committed to repo** (`deploy/kraken-bot.service`) — blocked on VPS SSH access, tracked as Day 56 in `DAILY_ITERATIONS.md`.
 
