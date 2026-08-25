@@ -1,0 +1,30 @@
+# Day 76: automated dependency update PRs.
+#
+# Day 58's pip-audit finds known vulnerabilities in CI but doesn't propose
+# a fix; Day 71 pinned upper bounds so a fresh install can't silently jump
+# a breaking version, but someone still has to notice when a new minor or
+# patch version ships and open the bump PR by hand. This closes that loop.
+#
+# Minor/patch updates are grouped into a single PR per week instead of one
+# PR per package — SECURITY.md section 5 still asks for one dependency per
+# commit when a human does the bump, but Dependabot's own PR already isolates
+# each grouped batch to a single reviewable diff against requirements.txt,
+# and CI (pytest + pip-audit) gates every PR the same way either method
+# produces it.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
