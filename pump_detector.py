@@ -96,7 +96,7 @@ def find_pumping_coins(client, min_volume_multiplier: float = 2.0, top_n: int = 
                     "trades_today": trades_today,
                 })
 
-        except (ValueError, KeyError, ZeroDivisionError):
+        except (ValueError, KeyError, ZeroDivisionError, IndexError):
             continue
 
     # Sort by volume spike — biggest unknown pumps first
