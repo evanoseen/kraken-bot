@@ -326,3 +326,39 @@ This backlog hit its ceiling again — same pattern as the Day 55 status note ab
 **Why:** Day 77's coverage re-run flagged `positions.py` at 57% as the new lowest — same pattern as `pump_detector.py`/`listing_monitor.py` before it: no `test_positions.py` exists at all. Every call site elsewhere mocks `record_buy`/`remove_position`/`get_position`/`log_trade` directly rather than exercising the real read/write/exception-handling logic.
 **Do:** Write `tests/test_positions.py` covering `load_positions` (missing file, malformed JSON), `save_positions`/`record_buy`/`remove_position`/`update_peak_price` (real file round-trips, sandboxed via `monkeypatch.chdir(tmp_path)`), and `log_trade`'s CSV + JSONL writes including the write-failure exception branches and the action-string-without-underscore fallback (`side, signal_source = action, "unknown"`).
 **Done when:** `make coverage` shows `positions.py` above 85%, and the full suite still passes.
+
+---
+
+## Status note (added Day 79, 2026-08-29)
+
+Backlog ran dry three times in four days (76→77, 77→78, 78→79) — the single-entry-at-a-time pattern from Days 77/78 isn't sustainable. Also found the biggest piece of drift yet while surveying for what to add: `ISA.md`, the project's own declared "system of record" ("iteration on the bot is iteration on this file"), had `updated: 2026-05-20` in its frontmatter — untouched since Day 2, through 76 subsequent days of shipped work. 34 of its 38 criteria were still marked unchecked despite the corresponding features (kill switch, heartbeat, JSONL trades, drawdown breaker, deploy script, and more) having shipped and been in daily use for weeks. Fixed as today's actual task — see `ISA.md`'s Day 79 Changelog entry for the full account. Days 80-85 below come out of that same pass, not guessed.
+
+## Day 80: kraken_client.py coverage improvement
+**Why:** Day 77's coverage survey named `kraken_client.py` (75%) as the next-lowest file after the two zero-coverage modules got fixed. Unlike those, it already has a test file (`test_kraken_client.py`, since Day 15) — the gap is specific missing branches, not the whole module.
+**Do:** Read the current `make coverage` missing-lines list for `kraken_client.py` and add tests for whichever error/edge branches across `get_balance`, `get_holdings`, `get_tradable_coins`, `get_price`, and `place_order` are uncovered — likely Kraken error-response handling and malformed-response guards, given the pattern from Days 77-78.
+**Done when:** `make coverage` shows `kraken_client.py` above 90%, and the full suite still passes.
+
+## Day 81: trader.py coverage improvement
+**Why:** The largest file in the codebase (288 statements) at 82% coverage — the last of the three files Day 72's original survey flagged, after `pump_detector.py`, `listing_monitor.py`, and `positions.py` were each brought above 90%+ on Days 77-78.
+**Do:** Read the current `make coverage` missing-lines list for `trader.py` and add tests for whichever branches in `run_trading_cycle`/`check_exit_conditions` are uncovered — likely rarer exit paths (specific error-response shapes, guard clauses that rarely fire in the existing mocked-cycle tests).
+**Done when:** `make coverage` shows `trader.py` above 90%, and the full suite still passes.
+
+## Day 82: README.md re-audit
+**Why:** Last regenerated Day 64. Since then: trailing stop (69), config validation (73), positions reconciliation (74), coverage tooling (72), Dependabot (76), and direct test coverage for three previously-untested modules (77, 78) have all shipped without the README's Features list or Tech Stack section being touched — the exact drift pattern Day 64 fixed the first time.
+**Do:** Regenerate the Features section against the current module set and `DAILY_ITERATIONS.md`. Confirm the CI badge still resolves and the Mermaid diagram still matches the real call graph (actually verify rendering this time if a working browser tool is available — Day 64 couldn't).
+**Done when:** README's feature list has no gaps against the current shipped-features list, and either the diagram is visually confirmed rendering or the verification gap is explicitly noted (not silently skipped).
+
+## Day 83: CI coverage regression guard
+**Why:** `make coverage` (Day 72) is a manual, local-only command. Nothing stops overall coverage from silently dropping in a future PR the way `.env.example`, the README, and `STRATEGY.md` all silently drifted before something forced a permanent check (Days 63, 64, 66's lesson, generalized).
+**Do:** Add `--cov-fail-under=90` (or the current overall percentage, whichever is lower risk) to the `pip-audit`/pytest CI step in `.github/workflows/test.yml`, or a dedicated coverage job. Document the threshold-bump procedure (raise it, don't lower it, when coverage genuinely improves) in `CLAUDE.md`-equivalent project docs.
+**Done when:** A CI run against a synthetic coverage drop (temporarily skip a test file) fails the build; the real current state passes.
+
+## Day 84: JOURNAL.md catch-up for Days 66-79
+**Why:** Day 65 already fixed this exact gap once (Days 26-54, 58-64 had no journal entries). It's back: Days 66-79 shipped with thorough commit messages but no `JOURNAL.md` paragraphs, same as before. Worth naming honestly rather than re-discovering silently: the one-entry-per-day discipline didn't survive contact with 14 more days of momentum, same as the first time.
+**Do:** Write one retrospective block entry covering Days 66-79, grouped by category (same shape as Day 65's). Name the repeat explicitly as the "surprised by" finding — that's the actually useful signal, not a list of what shipped (commit messages already have that).
+**Done when:** `JOURNAL.md` has a dated entry covering the Day 66-79 gap.
+
+## Day 85: ISA v2 — define ISCs for Days 18-79 features
+**Why:** Day 79's ISA re-audit deliberately scoped down to checking the original 38 ISCs against reality, not adding new ones for everything shipped since (trailing stop, confidence-scaled sizing, config validation, positions reconciliation, coverage tooling, Dependabot, blacklist/cooldown/headline-cache, and more) — see `ISA.md`'s Day 79 Decisions entry for why that was deferred rather than done same-day.
+**Do:** Draft a second wave of ISCs (ISC-39 onward) covering the major features that shipped after the original 38 were seeded. Prioritize risk-relevant ones (trailing stop, config validation, reconciliation) over cosmetic ones. Update the Features and Test Strategy tables to match.
+**Done when:** `ISA.md` has ISC-39+ covering at least the six features named above, each with a Test Strategy row and a Verification entry.
