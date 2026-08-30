@@ -11,35 +11,18 @@ Pins three behaviors:
 
 To keep the suite fast, `_retry_kraken.wait` is monkeypatched to
 `wait_none()` so we don't pay seconds of exponential backoff per test.
+The `fast_retry` fixture that does this lives in `tests/conftest.py`
+(moved there Day 80 so `tests/test_kraken_client.py` can reuse it).
 """
 from __future__ import annotations
 
 import ast
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-from tenacity import wait_none
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-@pytest.fixture
-def fast_retry(mocker):
-    """Patch retry wait + rate-limiter sleep to zero so tests stay fast.
-
-    Day 18 added tenacity exponential backoff between retries; Day 19 added
-    a `time.sleep` rate limiter inside _call_private/_call_public. Both are
-    neutralized here so retry/rate-limiter logic still runs but the test
-    finishes in milliseconds instead of seconds.
-    """
-    import kraken_client
-
-    mocker.patch.object(kraken_client._call_private.retry, "wait", wait_none())
-    mocker.patch.object(kraken_client._call_public.retry, "wait", wait_none())
-    mocker.patch("kraken_client.time.sleep")
-    return kraken_client
 
 
 # ─── Contract: every network-hitting function uses a retry helper ─────────

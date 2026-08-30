@@ -30,6 +30,24 @@ def reset_kraken_rate_limiter(mocker):
     mocker.patch("kraken_client.time.sleep")
 
 
+@pytest.fixture
+def fast_retry(mocker):
+    """Patch retry wait + rate-limiter sleep to zero so retry-exhaustion
+    tests stay fast (Day 18 added tenacity exponential backoff; Day 19
+    added a rate-limiter sleep). Both are neutralized here so the retry
+    logic still runs but the test finishes in milliseconds instead of
+    seconds. Moved here from tests/test_kraken_retry.py (Day 80) so
+    tests/test_kraken_client.py can reuse it too.
+    """
+    import kraken_client
+    from tenacity import wait_none
+
+    mocker.patch.object(kraken_client._call_private.retry, "wait", wait_none())
+    mocker.patch.object(kraken_client._call_public.retry, "wait", wait_none())
+    mocker.patch("kraken_client.time.sleep")
+    return kraken_client
+
+
 @pytest.fixture(autouse=True)
 def reset_headline_cache():
     """Clear the Day 47 seen-headline set so tests never see stale state
