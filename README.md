@@ -14,7 +14,9 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 
 **Risk management**
 - **Confidence-scaled position sizing** — Trade size scales linearly between `MIN_TRADE_AMOUNT` and `MAX_TRADE_AMOUNT` based on signal confidence, not a flat amount
+- **Config validation at startup** — Contradictory or out-of-range tunables (e.g. `MIN_TRADE_AMOUNT` above `MAX_TRADE_AMOUNT`) fail loud before the first cycle instead of producing confusing behavior downstream
 - **Daily loss limit + drawdown circuit breaker** — Halts trading for the day on either a fixed CAD loss or a percentage drawdown from the session peak
+- **Trailing stop** — Optional; locks in gains by exiting on a pullback from the position's peak price, not just a fixed take-profit target
 - **Balance reserve floor** — A configurable CAD amount the bot will never trade with
 - **Per-coin blacklist, per-coin trade cap, and post-trade cooldown** — Prevents hammering the same ticker across cycles
 - **Max open positions + max trades per day** — Hard ceilings independent of signal confidence
@@ -24,18 +26,20 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 
 **Ops & observability**
 - **24/7 operation** — Runs as a systemd service on a Linux VPS, `Restart=always`
-- **Telegram alerts** — Fires on every trade, on graceful shutdown with a session summary, and when the heartbeat goes stale (crash/hang detection, meant to run from a separate machine)
+- **Telegram alerts** — Fires on every trade, on graceful shutdown with a session summary, when the heartbeat goes stale, and when live Kraken holdings drift from what the bot thinks it holds
 - **Heartbeat + status file** — `last_run.txt` and `status.json` answer "is the bot alive, and what's it doing" without SSHing in or parsing logs
+- **Positions reconciliation** — Diffs `positions.json` against live Kraken holdings to catch a manual trade, a partial fill, or state corruption before it becomes an incident
 - **Structured trade log** — Every trade appended to both `trades.csv` and `trades.jsonl`, with a monthly archive script so neither grows forever
 - **Rotating log file + retry/backoff + rate limiting** — `bot.log` caps at 5MB × 5 backups; Kraken API calls retry on transient errors and stay under 1/sec
 - **One-command deploy** — `make deploy` tests, rsyncs, restarts the service, and verifies the heartbeat advanced before declaring success
-- **CI on every push** — pytest plus a `pip-audit` dependency vulnerability scan
+- **CI on every push** — pytest, a `pip-audit` dependency vulnerability scan, and Dependabot-proposed dependency updates
+- **Test coverage tracked** — `make coverage`; the whole codebase sits at 98%+ as of Day 81
 
 ## How It Works
 
 Every `RUN_INTERVAL_MINUTES` (default 15) the bot:
 1. Checks the kill switch, balance, daily loss limit, and drawdown circuit breaker
-2. Checks stop-loss / take-profit / max-age exits on anything currently held
+2. Checks trailing-stop / stop-loss / take-profit / max-age exits on anything currently held
 3. Scans Kraken's blog for new coin listings → buys watchlisted coins immediately
 4. Detects volume spikes across all tradable coins
 5. Fetches new crypto headlines and sends them to Claude AI for signal extraction
@@ -115,7 +119,7 @@ $EDITOR .env
 
 Fill in `KRAKEN_API_KEY`, `KRAKEN_PRIVATE_KEY`, and `ANTHROPIC_API_KEY`; everything else has a safe default. [.env.example](.env.example) documents all 26 variables the bot reads — it's kept in exact sync with the code by [tests/test_env_example.py](tests/test_env_example.py), so it's always current.
 
-Set `DRY_RUN=false` to go live, only after watching at least one full dry-run cycle in the logs.
+Set `DRY_RUN=false` to go live, only after watching at least one full dry-run cycle in the logs. Contradictory values (e.g. `MIN_TRADE_AMOUNT` above `MAX_TRADE_AMOUNT`) are rejected at startup with a clear error rather than failing silently mid-cycle.
 
 ### Run locally
 
@@ -210,15 +214,18 @@ kraken-bot/
 ├── notifier.py                 # Telegram alerts (trades, shutdown, stale heartbeat)
 │
 ├── scripts/
-│   ├── daily.sh                # Prints today's DAILY_ITERATIONS.md task
-│   ├── daily_pnl.py            # Per-day PnL report, --since/--until range
-│   ├── archive_trades.py       # Rotates old trades.csv/trades.jsonl entries
-│   ├── check_heartbeat.py      # Telegram alert if the heartbeat goes stale (run off-VPS)
+│   ├── daily.sh                 # Prints today's DAILY_ITERATIONS.md task
+│   ├── daily_pnl.py             # Per-day PnL report, --since/--until range
+│   ├── archive_trades.py        # Rotates old trades.csv/trades.jsonl entries
+│   ├── check_heartbeat.py       # Telegram alert if the heartbeat goes stale (run off-VPS)
+│   ├── reconcile_positions.py   # Diffs positions.json against live Kraken holdings (run on-VPS)
 │   └── deploy.sh                # test → rsync → restart → verify heartbeat
 │
-├── tests/                       # 45 test files, run with `make test` / `pytest`
-├── Makefile                     # help/test/run/dry/deploy/logs/restart/status
-├── .github/workflows/test.yml   # CI: pytest + pip-audit on every push
+├── tests/                        # 52 test files / 466 tests, run with `make test` / `pytest`
+├── Makefile                      # help/test/coverage/run/dry/deploy/logs/restart/status
+├── .coveragerc                   # Coverage scope — excludes tests/, venv/, site-packages
+├── .github/workflows/test.yml    # CI: pytest + pip-audit on every push
+├── .github/dependabot.yml        # Weekly grouped dependency update PRs
 └── requirements.txt
 ```
 
@@ -246,6 +253,7 @@ This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to 
 - tenacity — retry/backoff on Kraken API calls
 - requests — Telegram + Kraken connectivity check
 - python-dotenv — `.env` loading
-- pytest / pytest-mock — 45 test files, run in CI on every push
+- pytest / pytest-mock / pytest-cov — 52 test files (466 tests), run in CI on every push
 - pip-audit — dependency vulnerability scanning in CI
-- mypy — type checking on `kraken_client.py` and `trader.py`
+- Dependabot — weekly grouped dependency update PRs
+- mypy — type checking locked on `kraken_client.py`, `trader.py`, `config.py`, `notifier.py`, `status.py`, and `blacklist.py`
