@@ -34,8 +34,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run pytest
-        run: pytest -v
+      - name: Run pytest with coverage gate
+        # Day 83: fails the build if overall coverage (scope per .coveragerc —
+        # tests/, venv/, site-packages excluded) drops below the threshold.
+        # 98% as of Day 81; 95% leaves headroom for normal small additions
+        # while still catching a real regression (e.g. a skipped test file,
+        # which drops coverage by several points in one move).
+        #
+        # Raise this number when coverage genuinely improves and stays there
+        # for a few days — never lower it to make a failing PR pass. If a
+        # legitimate change needs new, not-yet-tested code (a fresh module,
+        # a large refactor mid-flight), that's a signal to add tests in the
+        # same PR, not to loosen the gate.
+        run: pytest -v --cov=. --cov-report=term-missing --cov-fail-under=95
 
       - name: Dependency vulnerability scan (pip-audit)
         # --ignore-vuln entries are advisories with no published fix version

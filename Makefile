@@ -23,6 +23,10 @@ test:
 # Day 72: bot source only — tests/, venv/, and site-packages excluded via
 # .coveragerc so the report reflects what the *bot* exercises, not the
 # near-100%-self-covering test files themselves.
+#
+# Day 83: CI runs this same scope with --cov-fail-under=95 on every push —
+# see .github/workflows/test.yml for the threshold and the bump policy
+# (raise it when coverage improves and holds; never lower it to pass a PR).
 coverage:
 	$(VENV)/python3 -m pytest --cov=. --cov-report=term-missing -q
 
