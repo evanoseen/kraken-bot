@@ -2,7 +2,7 @@
 project: kraken-bot
 phase: verify
 started: 2026-05-20
-updated: 2026-08-29
+updated: 2026-09-09
 ---
 
 # Kraken Bot — Project ISA
@@ -113,6 +113,17 @@ This is a seed set. The Daily Iteration backlog (`DAILY_ITERATIONS.md`) will exp
 - [ ] ISC-31: `deploy/kraken-bot.service` matches the systemd unit running on the VPS
 - [x] ISC-32: `scripts/deploy.sh` runs tests, rsyncs the repo, restarts the service, and verifies the heartbeat advanced (Day 57 — rsync instead of the originally-conjectured scp, so `.env` on the server is never clobbered)
 
+### Extended (Days 18-83, seeded Day 85)
+
+The original 38 ISCs described the project as it stood at Day 2. Day 79's re-audit deliberately checked those against reality without adding new criteria for everything shipped since — six of the highest-risk-relevant post-seed features, named explicitly in that day's Decisions entry, get their own ISCs here. Not exhaustive: `blacklist.py`, `cooldown.py`, `headline_cache.py`, and other lower-risk guardrails shipped in the same window remain undocumented in the ISA (tracked informally in `STRATEGY.md` and `DAILY_ITERATIONS.md` instead) — deliberately deferred again rather than turning this into a third pass the same day, per Day 84's journal caution against compounding process on top of process.
+
+- [x] ISC-39: Confidence-scaled position sizing — `trader.size_position()` (Day 62) scales trade size linearly over `[MIN_CONFIDENCE, 1.0]`; a signal at the confidence floor sizes `MIN_TRADE_AMOUNT`, a maximum-confidence signal sizes `MAX_TRADE_AMOUNT`
+- [x] ISC-40: Trailing stop — `TRAILING_STOP_PCT` (Day 69), when set, exits a position on a pullback from its peak price since entry, checked before the fixed stop-loss/take-profit thresholds and only once the peak has moved above entry
+- [x] ISC-41: Config validation at load time — `Config.validate()` (Day 73) rejects out-of-range or contradictory tunables (e.g. `MIN_TRADE_AMOUNT > MAX_TRADE_AMOUNT`) at startup via `health.run_checks()`, before any trading cycle runs
+- [x] ISC-42: Positions reconciliation — `scripts/reconcile_positions.py` (Day 74) diffs live Kraken holdings against `positions.json` and reports (Telegram-alerts, unless `--no-alert`) any coin held on one side but not the other
+- [x] ISC-43: Test coverage measured and enforced — `make coverage` (Day 72) scopes to bot source via `.coveragerc`; CI fails the build if overall coverage drops below 95% (Day 83)
+- [x] ISC-44: Automated dependency update PRs — `.github/dependabot.yml` (Day 76) proposes weekly grouped minor/patch updates for the `pip` ecosystem, gated by the same CI (pytest + `pip-audit`) as any human-authored PR
+
 ### Anti-criteria
 
 - [x] ISC-33: Anti: no auto-commit cron, no GitHub-activity-inflation script, no fake-commit automation lives in this repo
@@ -149,6 +160,12 @@ This is a seed set. The Daily Iteration backlog (`DAILY_ITERATIONS.md`) will exp
 | ISC-29..30 | file | `SECURITY.md` and `.env.example` exist with required content | yes | `Read + grep` |
 | ISC-31 | diff | `deploy/kraken-bot.service` matches what is on the VPS | identical | `ssh cat + diff` |
 | ISC-32 | bash | `./scripts/deploy.sh` end to end exits 0 on no-op change | exit 0 | Bash |
+| ISC-39 | code | `trader.size_position()` unit-tested at confidence floor and ceiling | tests pass | `pytest tests/test_position_sizing.py` |
+| ISC-40 | code | trailing-stop unit tests cover peak-tracking, the losing-exit branch, and the never-ran-up no-op case | tests pass | `pytest tests/test_trailing_stop.py` |
+| ISC-41 | bash | `Config.validate()` raises on `MIN_TRADE_AMOUNT > MAX_TRADE_AMOUNT`; `health.run_checks()` exits 1 | tests pass, exit 1 | `pytest tests/test_config_validation.py` |
+| ISC-42 | bash | `scripts/reconcile_positions.py` reports a synthetic coin-only-in-Kraken and coin-only-in-positions.json case | both reported | `pytest tests/test_reconcile_positions.py` |
+| ISC-43 | bash | `make coverage` reports ≥95% overall; CI fails on a synthetic drop below it | ≥95%, gate fires | `make coverage ; gh run list` |
+| ISC-44 | file | `.github/dependabot.yml` is valid YAML and triggers a real Dependabot workflow run after push | run observed | `python3 -c "import yaml..." ; gh api .../actions/runs` |
 | ISC-33 | scan | no auto-commit script anywhere in repo | none | `grep -r "git commit" scripts/` |
 | ISC-34 | scan | no committed file contains a real secret-shaped value | none | `git log -p \| grep` |
 | ISC-35 | code | trading pairs restricted to CAD | enforced | `Grep` |
@@ -164,8 +181,10 @@ This is a seed set. The Daily Iteration backlog (`DAILY_ITERATIONS.md`) will exp
 | docs & runbook | ISC-7, ISC-11, ISC-29, ISC-30 | none | yes |
 | observability layer | ISC-16, ISC-17, ISC-18, ISC-19 | none | yes |
 | quality bar | ISC-20..25 | observability | partial |
-| resilience | ISC-26, ISC-27, ISC-28 | observability | no |
+| resilience | ISC-26, ISC-27, ISC-28, ISC-40 | observability | no |
 | deploy automation | ISC-31, ISC-32 | resilience | no |
+| risk-aware sizing & startup safety | ISC-39, ISC-41 | quality bar | yes |
+| ops hygiene | ISC-42, ISC-43, ISC-44 | observability, quality bar | yes |
 
 ## Decisions
 
@@ -175,11 +194,14 @@ This is a seed set. The Daily Iteration backlog (`DAILY_ITERATIONS.md`) will exp
 - 2026-05-20 **decision:** `ISC-38` (antecedent) binds the ISA to `DAILY_ITERATIONS.md`. Reason: the two artifacts must stay in sync — every gap names a backlog item.
 - 2026-08-29 **decision:** This pass checks off the original 38 ISCs against reality and fixes the two places reality diverged from the Day-2 conjecture (`status.json` vs. the originally-named `latest_status.json`; `MAX_DRAWDOWN_PCT=0.20` shipped vs. the originally-conjectured 15%), but does **not** add new ISCs for every feature shipped since Day 2 (trailing stop, confidence-scaled sizing, config validation, positions reconciliation, coverage tooling, Dependabot, blacklist/cooldown/headline-cache, and more). Reason: this file's own first line says "iteration on the bot is iteration on this file," and that discipline broke down completely for 78 days — the honest fix today is closing the gap that already exists, not compounding scope into a same-day rewrite of the whole ISC set. A proper "ISA v2: define ISCs for Days 18-79" pass is queued as its own backlog task so it gets the attention a from-scratch criteria set deserves, instead of being bolted onto a catch-up.
 - 2026-08-29 **decision:** Verification entries now cite function/file names instead of line numbers. Reason: the original Verification section cited exact line numbers (`trader.py:168`, etc.) and at least one had already gone factually wrong by Day 62 (the formula it described was replaced) well before anyone noticed — the same class of drift this project has independently rediscovered and fixed in READMEs, STRATEGY.md, and SECURITY.md on Days 55, 63, 64, 66, and 75. A function name survives a refactor; a line number is a promise that decays the moment the file changes.
+- 2026-09-09 **decision:** ISC-39..44 cover the six features Day 79 explicitly named as highest risk-relevance, and stop there — `blacklist.py`, `cooldown.py`, `headline_cache.py`, and other guardrails shipped in the same window are not given ISCs today. Reason: the backlog task's own instruction was "prioritize risk-relevant ones... over cosmetic ones," and Day 84's journal entry (written three days before this one) specifically flagged the risk of responding to "docs went stale" by adding more process rather than fixing the underlying habit. Exhaustively cataloging every guardrail into ISC form would be real work, but doing it reactively, in the same sitting as the six that were already named, would repeat the exact pattern being cautioned against. If those guardrails need ISA-level tracking later, that's a task to pick deliberately, not a scope creep to absorb here.
+- 2026-09-09 **decision:** New ISCs are seeded pre-checked (`[x]`), with test-file citations rather than bare code references. Reason: unlike the Day 2 seed (checking off behavior that existed but had no tests yet) or the Day 79 re-verification (checking off behavior that shipped without ISA tracking), all six of these features already had dedicated tests on the day they shipped — Days 62, 69, 72, 73, 74, 76, and 83 all closed with a green suite. Citing the test file, not just the implementation, means a future reader can re-run the actual verification instead of taking the checkbox on faith.
 
 ## Changelog
 
 - 2026-05-20 **seeded** | conjectured: "A meme coin bot only needs strategy code." | refuted by: "Three commits in two months, no tests, no runbook, no observability — the surface that fails first is the engineering scaffold, not the strategy." | learned: The project's risk surface is operational and observational, not just algorithmic. | criterion now: 38 ISCs cover ops, signals, trading, observability, quality, resilience, security, deploy, anti-criteria, and antecedent — the engineering scaffold IS the ISA.
 - 2026-08-29 **re-verified after 78 days dark** | conjectured (implicitly, by neglect): "Once the ISA is seeded, the daily-iteration backlog is enough to keep the project honest on its own." | refuted by: this file's own frontmatter — `updated: 2026-05-20`, unchanged through 76 subsequent days of shipped work, while its Vision paragraph kept describing a kill switch, Telegram alerts, JSONL history, drawdown breakers, and a one-command deploy as aspirational, all of which had shipped and been verified working weeks or months earlier. `DAILY_ITERATIONS.md` and `JOURNAL.md` turned out to be necessary but not sufficient — they recorded that work happened, but nothing forced the record of *what the project actually is* to stay current, and the gap wasn't visible from inside any single day's task. | learned: A "living" document doesn't stay alive by being declared one; it needs the same kind of periodic, scheduled re-audit this project has now applied to every other doc (README Day 64, STRATEGY.md Day 66, SECURITY.md Day 75, `.env.example` continuously via Day 63's test) — and the highest-leverage one, the actual system of record, went the longest without it precisely because nothing was pointed at it. | criterion now: 34 of 38 ISCs checked with current, function-level (not line-number) verification; ISC-31 (systemd unit in repo) remains genuinely open, correctly mapped to Day 56; two ISCs' wording corrected to match what was actually shipped rather than the original conjecture.
+- 2026-09-09 **ISA v2** | conjectured: "Checking the original 38 ISCs against reality (Day 79) closes the gap between this file and the codebase." | refuted by: it only closes the gap for features that existed when the ISA was seeded — six materially risk-relevant behaviors shipped afterward (confidence-scaled sizing Day 62, trailing stop Day 69, config validation Day 73, positions reconciliation Day 74, coverage enforcement Day 72/83, Dependabot Day 76) had no ISC at all, checked or unchecked, so re-verifying the original 38 alone would have quietly certified a smaller project than the one actually running. | learned: "the ISA describes the current project" and "every ISC in the ISA is accurate" are different claims — Day 79 satisfied the second without the first, and only writing this second wave surfaced the difference. | criterion now: ISC-39 through ISC-44 added, all pre-checked with test-file citations (not just code references) since each already has direct coverage from the day it shipped. Explicitly did not cover blacklist/cooldown/headline-cache or attempt full Days-18-79 exhaustiveness — see Decisions.
 
 ## Verification
 
@@ -223,3 +245,12 @@ Re-verified Day 79 (2026-08-29) — 34 of 38 ISCs updated from unchecked to chec
 - ISC-36: `Config.validate()` (Day 73) raises `ValueError` at startup if `daily_loss_limit <= 0`, enforced via `health.run_checks()`
 - ISC-37: `OPS_RUNBOOK.md` section 4's pre-deploy checklist requires a `DRY_RUN=true` dry-run cycle before every deploy
 - ISC-38: the one remaining unchecked ISC (ISC-31) has an open, correctly-mapped `DAILY_ITERATIONS.md` entry (Day 56)
+
+Added Day 85 (2026-09-09) — the six ISC-39..44 entries, seeded already-checked since all six describe already-shipped, already-tested behavior (same convention as the Day 2 seed).
+
+- ISC-39: `trader.size_position()`, unit-tested in `tests/test_position_sizing.py` at the confidence floor (sizes `MIN_TRADE_AMOUNT`), the ceiling (sizes `MAX_TRADE_AMOUNT`), and mid-range
+- ISC-40: `trader.check_exit_conditions`'s trailing-stop branch, unit-tested in `tests/test_trailing_stop.py` (peak-tracking, a losing exit, the never-ran-up no-op case) and `tests/test_trader_coverage_gaps.py` (a losing trailing-stop exit specifically)
+- ISC-41: `Config.validate()`, unit-tested in `tests/test_config_validation.py` (41 cases) plus `tests/test_health.py`'s wiring tests; smoke-tested outside pytest on Day 73 against a genuinely broken `.env`-equivalent config
+- ISC-42: `scripts/reconcile_positions.py`, unit-tested in `tests/test_reconcile_positions.py` — the literal Day 74 done-when (a coin only in Kraken, a coin only in `positions.json`, both reported) is `test_reconcile_finds_both_directions`
+- ISC-43: `make coverage` / `.coveragerc`; the CI gate verified for real on Day 83 by temporarily removing a test file and confirming pytest exits 1 with the expected failure message, then restoring and confirming a clean pass
+- ISC-44: `.github/dependabot.yml`; verified for real on Day 76 by watching GitHub trigger an actual `pip in /. - Update` workflow run immediately after the config was pushed, not just parsing the YAML locally
