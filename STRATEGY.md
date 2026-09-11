@@ -198,7 +198,6 @@ Positions are persisted in `positions.json` (`positions.py`) so the bot can reco
 This list is honest, not a roadmap. It was last true around Day 13 — retry/backoff, a rate limiter, the kill switch, the drawdown breaker, JSONL trade events, latency logging, and the test suite itself all shipped since (Days 18-53) and this section never got updated to say so, which is exactly the kind of drift Day 64 found in the README and Day 63 found (and didn't find) in `.env.example`. Re-audited as of Day 66; each item below is either an open backlog task in `DAILY_ITERATIONS.md` or a candidate to be added.
 
 - **No signal-driven exit on a held position whose catalyst has cleared.** The news layer can sell a held coin on a fresh `action: "sell"` signal, but nothing re-evaluates whether the *original* buy thesis is still valid — a position rides on stop-loss/take-profit/trailing-stop/max-age alone once entered.
-- **No test for the Nitter 3-instance failover.** `news_fetcher.py` fails over across `nitter.poast.org` / `nitter.privacydev.net` / `nitter.1d4.us`, but nothing exercises the failover path — a partial outage's behavior is unverified.
 - **Systemd unit not committed to the repo.** Day 56, still blocked on VPS SSH access this environment doesn't have.
 
 ## How to change strategy
