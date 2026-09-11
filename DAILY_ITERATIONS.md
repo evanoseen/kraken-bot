@@ -362,3 +362,20 @@ Backlog ran dry three times in four days (76→77, 77→78, 78→79) — the sin
 **Why:** Day 79's ISA re-audit deliberately scoped down to checking the original 38 ISCs against reality, not adding new ones for everything shipped since (trailing stop, confidence-scaled sizing, config validation, positions reconciliation, coverage tooling, Dependabot, blacklist/cooldown/headline-cache, and more) — see `ISA.md`'s Day 79 Decisions entry for why that was deferred rather than done same-day.
 **Do:** Draft a second wave of ISCs (ISC-39 onward) covering the major features that shipped after the original 38 were seeded. Prioritize risk-relevant ones (trailing stop, config validation, reconciliation) over cosmetic ones. Update the Features and Test Strategy tables to match.
 **Done when:** `ISA.md` has ISC-39+ covering at least the six features named above, each with a Test Strategy row and a Verification entry.
+
+## Day 86: review the 5 open Dependabot PRs
+**Why:** Dependabot (Day 76) had been dutifully opening PRs since 2026-08-25 — over two weeks — and nobody had reviewed a single one. A mechanism that opens PRs nobody looks at isn't actually closing the loop it was built for.
+**Do:** Review and merge each of the 5 open PRs individually, verifying locally after each (per SECURITY.md's one-dependency-per-commit bump procedure), not as a batch.
+**Done when:** All 5 PRs are either merged (verified) or explicitly closed with a documented reason.
+
+**Result (2026-09-11):** Merged 3 safe patch/minor bumps (pytest-mock, schedule, feedparser). The feedparser merge broke `pip install` on this actual Python 3.9.6 dev environment — 6.0.13+ requires Python >=3.10, which CI's Python-3.11 runner masked completely. Fixed forward by reverting just the floor bump. Investigating further found `pytest` 9.x and `anthropic` 1.x hit the identical Python >=3.10 wall — not a one-off bad bump, a pattern across three separate upstream packages. Closed both PRs with comments explaining why, documented the finding in SECURITY.md's bump procedure, and left the project's actual Python floor (3.8+ per the README) unchanged rather than let it get silently raised as a side effect of a routine dependency review.
+
+## Day 87: decide whether to raise the project's Python floor to 3.10+
+**Why:** Day 86 found that `feedparser`, `pytest`, and `anthropic` have all dropped support for Python <3.10 in their current major releases. The project's stated floor (README: "Python 3.8+") is now blocking three routine dependency updates, and more upstream packages will likely follow the same trend over time.
+**Do:** Decide deliberately — check what Python version the production VPS actually runs (needs VPS access, same blocker as Day 56), weigh the cost of a floor bump (any deploy-environment changes needed) against continuing to pin below these majors indefinitely. If raising the floor, update README/OPS_RUNBOOK/CI's `python-version`, and only then revisit the closed pytest/anthropic PRs — reading anthropic's actual 1.x migration guide before merging that one, not just trusting a mocked test suite.
+**Done when:** Either the floor is deliberately raised (with README/CI updated to match) or deliberately kept at 3.8+ with the reasoning recorded — not left ambiguous.
+
+## Day 88: document a Dependabot PR review cadence in OPS_RUNBOOK.md
+**Why:** The root cause of Day 86's 2+ week backlog wasn't that Dependabot failed — it's that nothing said when or how often to look. The same gap that hit every "living document" in this project (README, STRATEGY.md, SECURITY.md, ISA.md) before a scheduled audit was added.
+**Do:** Add a short section to `OPS_RUNBOOK.md` (or extend an existing ops-cadence section) naming a concrete review interval for open Dependabot PRs, and the checklist from SECURITY.md's Day 86 update (check Python-floor compatibility, check mock-coverage depth for major bumps) as the thing to actually do during that review.
+**Done when:** `OPS_RUNBOOK.md` names a specific cadence and references the Day 86 checklist.

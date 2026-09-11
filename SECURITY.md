@@ -180,7 +180,7 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager | 
 | PYSEC-2026-2275 | requests | 2.32.5 | Yes — direct runtime dep (Kraken/Telegram/Anthropic HTTP calls) | Every audit |
 | PYSEC-2026-142, PYSEC-2026-141 | urllib3 | 2.6.3 | Transitive via `requests` | Every audit |
 | PYSEC-2026-2270 | python-dotenv | 1.2.1 | Yes — loads `.env`, never parses untrusted input | Every audit |
-| PYSEC-2026-1845 | pytest | 8.4.2 | No — test-only, never runs on the VPS | Every audit |
+| PYSEC-2026-1845 | pytest | 8.4.2 | No — test-only, never runs on the VPS | Every audit — as of Day 86, pytest 9.x exists on PyPI (Day 58's "no fix published" is no longer true) but requires Python >=3.10, which this project can't take yet (see "Upper-bound pins" above) — still correctly ignored, for a different reason than originally recorded |
 | GHSA-6v7p-g79w-8964 | msgpack | 1.1.2 | No — transitive via `pip-audit`'s own CI-only dependency (`CacheControl`), not installed on the VPS | Every audit |
 | PYSEC-2026-1375, PYSEC-2026-1374 | filelock | 3.19.1 | No — transitive via `pip-audit`, CI-only | Every audit |
 
@@ -209,6 +209,11 @@ make test
 git commit -m "Bump requests to 2.33.0"
 ```
 If `make test` fails after a bump, that's the changelog-reading step this policy has always asked for, just enforced by the test suite instead of trusted to memory — read what changed, decide whether it's a real break or a test that needs updating, and fix accordingly before committing.
+
+**A green `make test` is not sufficient on its own (Day 86).** Reviewing 5 Dependabot PRs on Day 86 found that `feedparser` 6.0.13+, `pytest` 9.x, and `anthropic` 1.x all silently require Python >=3.10 — a constraint that has nothing to do with this codebase's own logic, so no test can catch it. CI didn't flag any of the three, because GitHub Actions runs Python 3.11 (already above the new floor); the break only surfaces on an actual Python 3.8/3.9 install, which is what this project's README still promises. Before merging *any* bump that crosses a major-version boundary:
+1. `pip download <package>==<proposed-version> --no-deps -d /tmp/checkme` against the actual environment(s) this bot needs to run on (not just CI's) — a `Requires-Python` mismatch shows up immediately as a resolver error, before a single test runs.
+2. For a bump to a library whose real behavior is fully mocked in tests (e.g. `anthropic` — see `tests/test_market_matcher.py`'s bare `MagicMock()` on `client.messages`), a passing suite proves the mock still works, not that the real API surface is unchanged. Read the actual migration guide for anything crossing a major version on a library used for something safety-relevant.
+3. If a bump is blocked purely by the Python-floor mismatch, don't merge it and don't lower a project-wide constraint to force it through — decline the PR with a comment explaining why (see PRs #1 and #3), and treat raising the project's own Python floor as its own deliberate decision, not a side effect of a routine dependency bump.
 
 ### Concrete actions
 ```bash
