@@ -3,8 +3,9 @@
 This bot trades real CAD on a live Kraken account from a Hetzner VPS. When something looks wrong, this file is the first place to look. Every section is concrete commands you can paste, not descriptions.
 
 > **Quick reference card**
-> - **Server:** `root@204.168.204.221` (Hetzner CX23, Ubuntu 24.04)
+> - **Server:** `root@204.168.204.221` (Hetzner CX23, Ubuntu 24.04, ships Python 3.12 by default)
 > - **Service:** `kraken-bot.service` (systemd, `Restart=always`)
+> - **Python floor:** 3.10+ (Day 87 — see `SECURITY.md` bump procedure for why)
 > - **Server path:** `/root/kraken-bot/`
 > - **Local path:** `/Users/evanoseen/kraken-bot/`
 > - **Live config:** `/root/kraken-bot/.env` on the server (NEVER committed)

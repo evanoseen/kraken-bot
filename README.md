@@ -96,7 +96,7 @@ flowchart LR
 ## Setup
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.10+
 - Kraken account with API key (trading permissions)
 - Anthropic API key
 
