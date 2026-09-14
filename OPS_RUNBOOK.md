@@ -501,3 +501,14 @@ EOF
 ```
 
 Healthy output: `active`, recent "Starting trading cycle" or "Trading cycle complete" lines, no unhandled exceptions in the tail.
+
+## 10. Maintenance cadence
+
+Dependabot (Day 76) opened its first 5 PRs on 2026-08-25 and nobody looked at one of them until Day 86, sixteen days later. A mechanism that opens PRs nobody reviews isn't actually closing the loop it was built for — this section names the interval so that doesn't happen again.
+
+**Review open Dependabot PRs weekly.** Every Monday (or the next session touching this repo after one), run `gh pr list` and work through anything open — one dependency per commit, per `SECURITY.md`'s bump procedure, not as a batch merge.
+
+For each PR, run the Day 86 checklist (`SECURITY.md` → "Bump procedure" → the "A green `make test` is not sufficient on its own" paragraph) before merging:
+1. `pip download <package>==<proposed-version> --no-deps -d /tmp/checkme` against this project's actual required Python version (`README.md` Prerequisites) — catches a `Requires-Python` floor mismatch before any test runs.
+2. If the bump crosses a major version on a library whose real behavior is mocked in tests (e.g. `anthropic`), a green suite only proves the mock still works — read the library's actual migration guide before merging.
+3. If a bump is blocked by the Python floor, don't merge it and don't lower the floor to force it through — close it with a comment explaining why, and treat raising the floor as its own deliberate decision (see Day 87).
