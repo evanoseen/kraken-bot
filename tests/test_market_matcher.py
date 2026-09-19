@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import anthropic
 import pytest
 
 
@@ -24,11 +25,12 @@ import pytest
 def _fake_claude_response(text: str) -> MagicMock:
     """Build a MagicMock shaped like `anthropic.types.Message`.
 
-    The real method returns an object whose `.content` is a list of blocks
-    each carrying a `.text` attribute. `market_matcher` reads `content[0].text`.
+    The real method returns an object whose `.content` is a list of blocks;
+    for a plain text prompt (no tools) that first block is a real
+    `anthropic.types.TextBlock`. `market_matcher` type-checks for that before
+    reading `.text`, so the fixture must use the real class, not a bare mock.
     """
-    block = MagicMock()
-    block.text = text
+    block = anthropic.types.TextBlock(type="text", text=text)
     msg = MagicMock()
     msg.content = [block]
     return msg
@@ -151,6 +153,30 @@ def test_anthropic_exception_returns_empty_list(patched_market_matcher):
     """If the Anthropic SDK raises, the function returns [] rather than crashing."""
     mm = patched_market_matcher
     mm.client.messages.create.side_effect = RuntimeError("simulated network failure")
+
+    signals = mm.analyze_news_for_trades(
+        headlines="1. anything",
+        available_coins=["DOGE"],
+    )
+
+    assert signals == []
+
+
+def test_non_text_block_returns_empty_list(patched_market_matcher):
+    """A non-TextBlock first content block (e.g. tool use) is rejected, not crashed on.
+
+    Anthropic SDK 1.x's `ContentBlock` union covers many block types besides
+    plain text (tool_use, thinking, server tool results, ...). This prompt
+    never requests tools, so a text block is expected, but the guard should
+    reject anything else cleanly rather than raise `AttributeError` on a
+    missing `.text`.
+    """
+    import anthropic
+
+    mm = patched_market_matcher
+    msg = MagicMock()
+    msg.content = [anthropic.types.ToolUseBlock(id="toolu_1", input={}, name="x", type="tool_use")]
+    mm.client.messages.create.return_value = msg
 
     signals = mm.analyze_news_for_trades(
         headlines="1. anything",

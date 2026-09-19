@@ -51,7 +51,11 @@ JSON array:"""
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}]
         )
-        raw = message.content[0].text.strip()
+        block = message.content[0]
+        if not isinstance(block, anthropic.types.TextBlock):
+            logger.error(f"Unexpected content block type from Claude: {type(block).__name__}")
+            return []
+        raw = block.text.strip()
 
         if "```" in raw:
             raw = raw.split("```")[1]
