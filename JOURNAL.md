@@ -506,3 +506,13 @@ Same gap as Day 65, again. The backlog entry for this task said "Days 66-79"; by
 **Next:** Day 85 (ISA v2 — second wave of ISCs) is still the oldest open item, queued since Day 79 and skipped twice now in favor of the Dependabot backlog (89, 90). Should be next unless something else forces a swap.
 
 ---
+
+## Day 91, 2026-09-19
+
+**Shipped:** Two things. First, closed a gap in `DAILY_ITERATIONS.md` itself: Days 84 and 85 were both fully shipped on time (2026-09-07 and 2026-09-09, commits `3329047` and `2059d46`) and both genuinely satisfy their own Done-when bar, but neither ever got a `**Result:**` paragraph appended — meaning this file, the one thing in the project whose entire job is to be an accurate record of what's done, had silently drifted from reality in the exact way `README.md`/`STRATEGY.md`/`.env.example`/`ISA.md` all have before it. Backfilled both paragraphs with real verification (re-read the JOURNAL catch-up entry for 84, re-read ISA.md's ISC-39..44 and its Decisions-log entry for 85) rather than re-doing already-shipped work. Second, the actual new code shipped today: `tests/test_market_matcher_types.py`, a permanent mypy + full-type-hints lock on `market_matcher.py`, mirroring the existing lock-test shape. Day 90 fixed a real mypy error in this file (the `anthropic` 1.x `ContentBlock` union breaking `.content[0].text`) but — unlike every prior file this project has made mypy-clean — never added the regression guard, leaving the fix unprotected against being silently reintroduced.
+
+**Surprised by:** `JOURNAL.md`'s own Day 90 "Next:" line pointed at Day 85 as "still the oldest open item... should be next" — written 2026-09-18, nine days after Day 85 had already shipped. The journal that exists specifically to keep this project's state legible was itself pointing at stale state. Neither gap (the missing Result paragraphs, or the stale Next: pointer) is a big deal on its own, but together they're the same lesson Day 65/66/79/84 already each found once — a living document doesn't stay honest by default, it stays honest because someone re-reads it against reality on a cadence, and this project's own tracking file needs that same discipline turned on itself, not just on `README.md`/`STRATEGY.md`/`ISA.md`.
+
+**Next:** Day 92 (lock the remaining 16 modules' mypy-clean state — same pattern that just caught `market_matcher.py`) is queued first, followed by Day 93 (the one real open item in `STRATEGY.md`'s structural-weaknesses list: signal-driven exit on a stale buy thesis) and Day 94 (raise the CI coverage gate off its Day 83 floor now that 98% has held stable for ten days).
+
+---
