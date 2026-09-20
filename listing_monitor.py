@@ -29,7 +29,7 @@ def load_seen() -> set:
     return set()
 
 
-def save_seen(seen: set):
+def save_seen(seen: set) -> None:
     with open(SEEN_FILE, "w") as f:
         json.dump(list(seen), f)
 

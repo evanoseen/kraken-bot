@@ -15,7 +15,7 @@ warning is logged — the function never raises.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +24,18 @@ def compute_value(
     client: object,
     holdings: dict[str, float],
     balance: float,
-    get_price_fn=None,
+    get_price_fn: Optional[Callable[[object, str], Optional[float]]] = None,
 ) -> float:
+    resolver: Callable[[object, str], Optional[float]]
     if get_price_fn is None:
-        from kraken_client import get_price as get_price_fn  # type: ignore[assignment]
+        from kraken_client import get_price as resolver
+    else:
+        resolver = get_price_fn
 
     position_value = 0.0
     for coin, amount in holdings.items():
         try:
-            price: Optional[float] = get_price_fn(client, coin)
+            price: Optional[float] = resolver(client, coin)
             if price:
                 position_value += amount * price
             else:

@@ -10,6 +10,8 @@ trader.py, not computed here.
 """
 import logging
 
+import krakenex
+
 logger = logging.getLogger(__name__)
 
 # Ignore majors and stablecoins only — everything else is fair game
@@ -25,7 +27,7 @@ IGNORE_COINS = {
 }
 
 
-def find_pumping_coins(client, min_volume_multiplier: float = 2.0, top_n: int = 5) -> list:
+def find_pumping_coins(client: krakenex.API, min_volume_multiplier: float = 2.0, top_n: int = 5) -> list:
     """
     Hunt obscure low-activity coins that suddenly spike in volume.
     Ignores majors AND popular memes — focuses on unknown coins nobody is talking about.

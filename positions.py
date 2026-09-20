@@ -30,7 +30,7 @@ def load_positions() -> dict:
         return {}
 
 
-def save_positions(positions: dict):
+def save_positions(positions: dict) -> None:
     try:
         with open(POSITIONS_FILE, "w") as f:
             json.dump(positions, f, indent=2)
@@ -38,7 +38,7 @@ def save_positions(positions: dict):
         logger.error(f"Failed to save positions: {e}")
 
 
-def record_buy(coin: str, price: float, amount_cad: float):
+def record_buy(coin: str, price: float, amount_cad: float) -> None:
     """Record a new buy position."""
     positions = load_positions()
     positions[coin] = {
@@ -50,7 +50,7 @@ def record_buy(coin: str, price: float, amount_cad: float):
     logger.info(f"Position recorded: {coin} @ ${price:.8f} (${amount_cad:.2f} CAD)")
 
 
-def remove_position(coin: str):
+def remove_position(coin: str) -> None:
     """Remove a position after selling."""
     positions = load_positions()
     positions.pop(coin, None)

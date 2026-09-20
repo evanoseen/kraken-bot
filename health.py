@@ -15,6 +15,8 @@ import sys
 
 import requests
 
+from config import Config
+
 logger = logging.getLogger(__name__)
 
 _KRAKEN_PING_URL = "https://api.kraken.com/0/public/Time"
@@ -27,7 +29,7 @@ _REQUIRED_VARS = [
 ]
 
 
-def _check_env(cfg) -> list[str]:
+def _check_env(cfg: Config) -> list[str]:
     missing = []
     for env_name, attr in _REQUIRED_VARS:
         if not getattr(cfg, attr):
@@ -43,7 +45,7 @@ def _check_kraken_connectivity() -> bool:
         return False
 
 
-def _log_banner(cfg) -> None:
+def _log_banner(cfg: Config) -> None:
     dry = "[DRY RUN] " if cfg.dry_run else ""
     lines = [
         "=" * 55,
@@ -65,7 +67,7 @@ def _log_banner(cfg) -> None:
         logger.info(line)
 
 
-def run_checks(cfg) -> None:
+def run_checks(cfg: Config) -> None:
     missing = _check_env(cfg)
     if missing:
         logger.error("Missing required env vars: %s", ", ".join(missing))
