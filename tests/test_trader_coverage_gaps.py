@@ -297,6 +297,33 @@ def test_live_buy_signal_places_order_and_records(cycle_setup, monkeypatch, mock
     assert trader._trades_today == 1
 
 
+def test_live_sell_signal_untracked_position_places_order_without_pnl(cycle_setup, monkeypatch, mocker):
+    """A coin Kraken shows as held but with no local `positions.json` record
+    (e.g. a manual trade, per the Day 74 reconciliation gap) is left alone
+    by check_signal_reversal_exits (Day 93) — it needs a tracked entry price
+    to judge a thesis against — so the generic signal loop's own live sell
+    branch is still the one that executes it, with pnl=None since there's
+    no recorded amount_cad to compare against."""
+    _, client = cycle_setup
+    monkeypatch.setenv("DRY_RUN", "false")
+    import config, importlib
+    importlib.reload(config)
+    mocker.patch("trader.cfg", config.Config.from_env())
+    mocker.patch("trader.get_holdings", return_value={"DOGE": 250.0})
+    # cycle_setup already defaults get_position to None (untracked).
+    mocker.patch("trader.analyze_news_for_trades", return_value=[
+        {"coin": "DOGE", "action": "sell", "confidence": 0.99, "reasoning": "test"},
+    ])
+
+    trader.run_trading_cycle()
+
+    trader.place_order.assert_called_once()
+    trader.remove_position.assert_not_called()
+    trader.log_trade.assert_any_call("DOGE", "sell_signal", 0.10, pytest.approx(23.8), None)
+    assert trader._wins == 0
+    assert trader._losses == 0
+
+
 def test_live_sell_signal_places_order_and_records_pnl(cycle_setup, monkeypatch, mocker):
     _, client = cycle_setup
     monkeypatch.setenv("DRY_RUN", "false")
@@ -307,8 +334,12 @@ def test_live_sell_signal_places_order_and_records_pnl(cycle_setup, monkeypatch,
     # entry 0.095 vs the flat get_price mock (0.10) is a ~5.3% move — inside
     # both STOP_LOSS_PCT and TAKE_PROFIT_PCT, so check_exit_conditions (which
     # also runs earlier in the same cycle, since holdings is non-empty)
-    # doesn't independently trigger its own exit on this same position
-    # before the main signal loop's sell-signal path gets to it.
+    # doesn't independently trigger its own exit on this same position.
+    # As of Day 93, a "sell" signal on a coin with a tracked position is
+    # claimed by check_signal_reversal_exits before the generic signal loop
+    # ever sees it — this is that path, not the generic loop's own sell
+    # handling (which only still fires for a Kraken-held coin with no
+    # tracked position; see test_max_positions.py::test_sell_not_blocked_at_limit).
     mocker.patch("trader.get_position", return_value={"entry_price": 0.095, "amount_cad": 20.0})
     mocker.patch("trader.analyze_news_for_trades", return_value=[
         {"coin": "DOGE", "action": "sell", "confidence": 0.99, "reasoning": "test"},
@@ -318,9 +349,8 @@ def test_live_sell_signal_places_order_and_records_pnl(cycle_setup, monkeypatch,
 
     trader.place_order.assert_called_once()
     trader.remove_position.assert_called_once_with("DOGE")
-    # trade_amount = size_position(0.99, ...) = 23.8 (see buy test); current_value
-    # for pnl is separately holdings["DOGE"] (250.0) * price (0.10) = 25.0, pnl = 5.0
-    trader.log_trade.assert_any_call("DOGE", "sell_signal", 0.10, pytest.approx(23.8), pytest.approx(5.0))
+    # current_value = holdings["DOGE"] (250.0) * price (0.10) = 25.0, pnl = 5.0
+    trader.log_trade.assert_any_call("DOGE", "sell_signalreversal", 0.10, pytest.approx(25.0), pytest.approx(5.0))
     assert trader._wins == 1
     assert trader._losses == 0
 
@@ -335,6 +365,9 @@ def test_live_sell_signal_losing_pnl_increments_losses(cycle_setup, monkeypatch,
     # entry 0.105 vs the flat 0.10 price mock: a small loss, still inside
     # both exit thresholds so check_exit_conditions doesn't fire its own
     # exit on this position first (same reasoning as the winning-pnl test).
+    # Also claimed by check_signal_reversal_exits (Day 93) — see the
+    # winning-pnl test above for why this is no longer the generic loop's
+    # "sell_signal" path.
     mocker.patch("trader.get_position", return_value={"entry_price": 0.105, "amount_cad": 30.0})
     mocker.patch("trader.analyze_news_for_trades", return_value=[
         {"coin": "DOGE", "action": "sell", "confidence": 0.99, "reasoning": "test"},
@@ -343,6 +376,6 @@ def test_live_sell_signal_losing_pnl_increments_losses(cycle_setup, monkeypatch,
     trader.run_trading_cycle()
 
     # current_value = 250.0 * 0.10 = 25.0; pnl = 25.0 - 30.0 = -5.0
-    trader.log_trade.assert_any_call("DOGE", "sell_signal", 0.10, pytest.approx(23.8), pytest.approx(-5.0))
+    trader.log_trade.assert_any_call("DOGE", "sell_signalreversal", 0.10, pytest.approx(25.0), pytest.approx(-5.0))
     assert trader._losses == 1
     assert trader._wins == 0

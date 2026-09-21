@@ -82,7 +82,8 @@ flowchart TD
     F --> G[Pump detector — obscure volume spikes]
     G --> H[News + Twitter — RSS + Nitter + Claude]
     H --> I[Merge pump + news signals]
-    I --> J{For each signal}
+    I --> I2[Signal-reversal exit check on holdings]
+    I2 --> J{For each signal}
     J -->|sell on coin not held| K[Skip]
     J -->|valid| L[Compute trade_amount]
     L --> M{DRY_RUN?}
@@ -111,7 +112,9 @@ Exits log structured PnL even in dry-run mode.
 
 **6. News scan.** `fetch_top_headlines` returns up to 60 items (Twitter prepended, RSS appended). `analyze_news_for_trades` sends them to Claude and returns filtered signals.
 
-**7. Signal merge and placement.** Pump and news signals are concatenated. For each:
+**7. Signal merge and reversal check.** Pump and news signals are concatenated and deduplicated. Before the per-signal loop runs, `check_signal_reversal_exits` (Day 93) exits any currently held coin whose merged signal batch this cycle carries a fresh `action: "sell"` — see "Signal-driven exit on a stale buy thesis" below.
+
+**8. Placement.** For each remaining signal:
 - Sells on coins not currently held are skipped (`trader.py:159`).
 - Price is fetched per coin; coins without a price quote are skipped.
 - Position size is `min(size_position(confidence), balance * 0.25)` — see "Position sizing and confidence math" below for `size_position`. The 25% balance cap is tighter than the listing buy's 30% — listing signals are trusted more.
@@ -158,7 +161,7 @@ The `balance * 0.25` cap in the table above still applies on top of `size_positi
 
 ## Exit logic
 
-Exits are mostly not signal-driven. A position closes on a fixed threshold (stop-loss, take-profit, trailing stop, or max age) or, for coins the bot currently holds, a fresh LLM sell signal — there's no manual sell-on-counter-signal beyond that, and the news layer cannot emit a sell on a coin already held that gets cleared purely on its own merits.
+A position closes on a fixed threshold (stop-loss, take-profit, trailing stop, or max age, all in `check_exit_conditions`), on a fresh signal reversal (`check_signal_reversal_exits`, Day 93), or on an LLM sell signal reaching the generic signal-processing loop for a coin already held. There's no manual sell-on-counter-signal beyond that, and the news layer cannot emit a sell on a coin already held that gets cleared purely on its own merits.
 
 | Trigger | Condition | Action |
 |---------|-----------|--------|
@@ -166,7 +169,22 @@ Exits are mostly not signal-driven. A position closes on a fixed threshold (stop
 | Stop loss | `(price - entry_price) / entry_price <= -STOP_LOSS_PCT` (default `-10%`) | Market sell full position, log `sell_stoploss`, remove position |
 | Take profit | `(price - entry_price) / entry_price >= TAKE_PROFIT_PCT` (default `+25%`) | Market sell full position, log `sell_takeprofit`, remove position |
 | Max age (Day 31) | Position held ≥ `MAX_POSITION_AGE_HOURS` (default `24h`), checked before all of the above | Market sell full position, log `sell_stale`, remove position |
-| News-driven sell | LLM emits `action: "sell"` for a held coin | Market sell, log `sell_signal`, remove position |
+| Signal reversal (Day 93) | This cycle's merged pump+news signal batch carries an `action: "sell"` for a coin already held | Market sell full position, log `sell_signalreversal`, remove position |
+| News-driven sell | LLM emits `action: "sell"` for a held coin, reaching the generic signal loop unclaimed by the row above | Market sell, log `sell_signal`, remove position |
+
+### Signal-driven exit on a stale buy thesis (Day 93)
+
+Before Day 93, a held position's original catalyst was never re-checked — only price thresholds (stop-loss/take-profit/trailing-stop/max-age) could close it, plus the incidental case where a fresh headline happened to produce a `sell` signal that survived all the way to the generic buy/sell loop at the bottom of the cycle (subject to blacklist/cooldown/per-coin-cap gating meant for new entries, not exits).
+
+`check_signal_reversal_exits` (`trader.py`) closes that gap directly. It runs once per cycle, right after this cycle's pump and news signals are merged and deduplicated but before the generic signal loop, and it is unconditional — it does not wait for price to move and it is not subject to the entry-side risk gates:
+
+- Build the set of coins with a fresh `action: "sell"` in this cycle's merged signal batch.
+- For each currently held coin in that set, exit immediately regardless of current P&L — the point is that the reason the position was opened no longer holds, not that the price has moved.
+- Log the triggering `reasoning` string alongside the exit so the record shows *why* the thesis was judged reversed, not just that it was.
+
+This still depends on the news layer choosing to re-surface the same coin with an opposing signal in a given cycle — Claude is not re-asked "is my existing thesis on coin X still valid" directly, since that would mean querying it once per held position every cycle. See "Cost/latency" note below for why that tradeoff was made deliberately rather than by omission.
+
+**Cost/latency tradeoff.** A held position's original catalyst is only re-evaluated when the same cycle's broad headline scan happens to surface a reversal for that specific coin — not via a dedicated per-position re-query. Querying Claude once per open position every `RUN_INTERVAL_MINUTES` would multiply LLM cost and latency by `len(holdings)` for a bot capped at `MAX_OPEN_POSITIONS` (small, but non-zero) positions, for a signal that in practice is highly correlated with the same broad scan already run for new entries. If this proves too slow to catch reversals in practice, the next step is a targeted per-holding re-query, not a broader scan.
 
 ### Trailing stop vs. fixed stop-loss/take-profit (Day 69)
 
@@ -197,8 +215,8 @@ Positions are persisted in `positions.json` (`positions.py`) so the bot can reco
 
 This list is honest, not a roadmap. It was last true around Day 13 — retry/backoff, a rate limiter, the kill switch, the drawdown breaker, JSONL trade events, latency logging, and the test suite itself all shipped since (Days 18-53) and this section never got updated to say so, which is exactly the kind of drift Day 64 found in the README and Day 63 found (and didn't find) in `.env.example`. Re-audited as of Day 66; each item below is either an open backlog task in `DAILY_ITERATIONS.md` or a candidate to be added.
 
-- **No signal-driven exit on a held position whose catalyst has cleared.** The news layer can sell a held coin on a fresh `action: "sell"` signal, but nothing re-evaluates whether the *original* buy thesis is still valid — a position rides on stop-loss/take-profit/trailing-stop/max-age alone once entered.
 - **Systemd unit not committed to the repo.** Day 56, still blocked on VPS SSH access this environment doesn't have.
+- **Signal-reversal exit (Day 93) piggybacks on the broad headline scan rather than re-querying per held position.** See the "Cost/latency tradeoff" note under "Signal-driven exit on a stale buy thesis" above — a deliberate tradeoff, not an oversight, but it means a reversal only gets caught if that cycle's scan happens to re-surface the same coin.
 
 ## How to change strategy
 

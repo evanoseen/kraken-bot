@@ -2,17 +2,18 @@
 
 `run_trading_cycle` is the entry point called every `RUN_INTERVAL_MINUTES`:
 kill switch and balance/drawdown gates, exit checks on held positions
-(stop-loss/take-profit/max-age), the three signal sources (listing, pump,
-news) merged and deduplicated, every risk gate (blacklist, cooldown,
-per-coin cap, max open positions), confidence-scaled position sizing
-(`size_position`, Day 62), then order placement — real or dry-run. Full
-stage-by-stage detail lives in STRATEGY.md; this module is where every
+(stop-loss/take-profit/trailing-stop/max-age, plus a signal-reversal check
+once this cycle's signals are known — Day 93), the three signal sources
+(listing, pump, news) merged and deduplicated, every risk gate (blacklist,
+cooldown, per-coin cap, max open positions), confidence-scaled position
+sizing (`size_position`, Day 62), then order placement — real or dry-run.
+Full stage-by-stage detail lives in STRATEGY.md; this module is where every
 guardrail from the daily-iteration backlog actually gets wired together.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import krakenex
 import logging
@@ -181,6 +182,73 @@ def check_exit_conditions(client: krakenex.API, holdings: dict[str, float]) -> N
                     logger.info(f"Take-profit executed for {coin} | Profit: +${pnl:.2f} CAD")
             else:
                 logger.info(f"[DRY RUN] Would take-profit sell {coin} | P&L: +${pnl:.2f}")
+
+
+def check_signal_reversal_exits(client: krakenex.API, holdings: dict[str, float], signals: list[dict[str, Any]]) -> set[str]:
+    """Exit a held position early when this cycle's signal sources reverse
+    on it (Day 93). `check_exit_conditions` only reacts to price thresholds
+    (stop-loss/take-profit/trailing-stop/max-age) — none of those re-check
+    whether the original buy thesis is still valid. This closes that gap:
+    if the same pump/news signal batch that could open a new position this
+    cycle also carries a fresh "sell" for a coin already held, exit now
+    instead of waiting for price to catch up with a thesis that's already
+    stale.
+
+    Returns the set of coins claimed by a reversal exit this call (whether
+    or not the position could actually be priced/sold), so the caller can
+    drop the matching "sell" signal from the generic signal loop — that
+    loop's own holdings snapshot may not yet reflect an order placed here,
+    and re-running the same sell through it would double-execute it.
+    """
+    global _wins, _losses
+    reversals = {
+        s["coin"].upper(): s.get("reasoning", "signal reversed")
+        for s in signals
+        if s.get("action", "").lower() == "sell"
+    }
+    claimed: set[str] = set()
+    for coin, amount in holdings.items():
+        if coin not in reversals:
+            continue
+
+        # No local position record (e.g. a Kraken-held coin the bot never
+        # tracked, per the Day 74 reconciliation gap) — leave the sell
+        # signal in place for the generic loop, which can still execute it
+        # without a tracked entry price.
+        position = get_position(coin)
+        if not position:
+            continue
+        price = get_price(client, coin)
+        if not price:
+            continue
+
+        claimed.add(coin)
+        entry_price = position["entry_price"]
+        amount_cad = position["amount_cad"]
+        current_value = amount * price
+        pnl = current_value - amount_cad
+
+        logger.warning(
+            f"SIGNAL REVERSAL: {coin} | buy thesis invalidated — {reversals[coin]} | "
+            f"entry ${entry_price:.8f} → now ${price:.8f} | P&L: ${pnl:.2f} CAD"
+        )
+        if not cfg.dry_run:
+            result = place_order(client, coin, "sell", current_value, price)
+            if result:
+                log_trade(coin, "sell_signalreversal", price, current_value, pnl)
+                csv_log(coin, "sell_signalreversal", current_value, price, pnl=pnl)
+                remove_position(coin)
+                notify_trade("sell_signalreversal", coin, current_value, price, pnl=pnl)
+                mark_traded(coin)
+                if pnl >= 0:
+                    _wins += 1
+                else:
+                    _losses += 1
+                logger.info(f"Signal-reversal exit executed for {coin} | P&L: ${pnl:.2f}")
+        else:
+            logger.info(f"[DRY RUN] Would signal-reversal sell {coin} | P&L: ${pnl:.2f}")
+
+    return claimed
 
 
 def size_position(confidence: float, min_confidence: float, min_trade_amount: float, max_trade_amount: float) -> float:
@@ -355,6 +423,21 @@ def run_trading_cycle() -> None:
         + (f", {dupes} merged)" if dupes else ")")
     )
 
+    # Signal-driven exit on a stale buy thesis (Day 93): a held coin
+    # reappearing with a fresh "sell" signal this cycle exits immediately,
+    # distinct from the price-only paths in check_exit_conditions above.
+    # Claimed coins are dropped from `signals` so the generic loop below
+    # doesn't also try to sell them — its own holdings snapshot may not
+    # yet reflect the order just placed here.
+    if holdings and signals:
+        claimed = check_signal_reversal_exits(client, holdings, signals)
+        if claimed:
+            signals = [
+                s for s in signals
+                if not (s["coin"].upper() in claimed and s.get("action", "").lower() == "sell")
+            ]
+        holdings = get_holdings(client)
+
     if not signals:
         logger.info("No confident signals. No trades placed.")
         logger.info("Trading cycle complete.")
@@ -432,21 +515,16 @@ def run_trading_cycle() -> None:
                     notify_trade("buy_signal", coin, trade_amount, price, confidence=confidence)
                     mark_traded(coin)
                 else:
-                    position = get_position(coin)
-                    pnl = None
-                    if position:
-                        current_value = holdings.get(coin, 0) * price
-                        pnl = current_value - position["amount_cad"]
-                        remove_position(coin)
-                    log_trade(coin, "sell_signal", price, trade_amount, pnl)
-                    csv_log(coin, "sell_signal", trade_amount, price, confidence=confidence, pnl=pnl)
-                    notify_trade("sell_signal", coin, trade_amount, price, confidence=confidence, pnl=pnl)
+                    # A tracked position (get_position(coin) truthy) is
+                    # always claimed by check_signal_reversal_exits (Day 93)
+                    # before its matching sell signal reaches this loop, so
+                    # only a Kraken-held, locally-untracked coin ever lands
+                    # here — no recorded entry price/amount_cad to compute
+                    # a pnl against.
+                    log_trade(coin, "sell_signal", price, trade_amount, None)
+                    csv_log(coin, "sell_signal", trade_amount, price, confidence=confidence, pnl=None)
+                    notify_trade("sell_signal", coin, trade_amount, price, confidence=confidence, pnl=None)
                     mark_traded(coin)
-                    if pnl is not None:
-                        if pnl >= 0:
-                            _wins += 1
-                        else:
-                            _losses += 1
                 _trades_today += 1
                 coin_increment(coin)
                 logger.info(f"Trade successful for {coin}! ({_trades_today}/{cfg.max_trades_per_day} today)")
