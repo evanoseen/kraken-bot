@@ -37,16 +37,19 @@ jobs:
       - name: Run pytest with coverage gate
         # Day 83: fails the build if overall coverage (scope per .coveragerc —
         # tests/, venv/, site-packages excluded) drops below the threshold.
-        # 98% as of Day 81; 95% leaves headroom for normal small additions
-        # while still catching a real regression (e.g. a skipped test file,
-        # which drops coverage by several points in one move).
+        #
+        # Day 94: raised 95 -> 96. Real coverage has held at 98%+ since Day 81
+        # (98.18% as of Day 93, 478 tests) with no sign of dropping — Day 83's
+        # original 95 was set against a 98% baseline for 3 points of headroom;
+        # this keeps roughly the same buffer against the current baseline
+        # rather than leaving the gate static while real coverage climbed.
         #
         # Raise this number when coverage genuinely improves and stays there
         # for a few days — never lower it to make a failing PR pass. If a
         # legitimate change needs new, not-yet-tested code (a fresh module,
         # a large refactor mid-flight), that's a signal to add tests in the
         # same PR, not to loosen the gate.
-        run: pytest -v --cov=. --cov-report=term-missing --cov-fail-under=95
+        run: pytest -v --cov=. --cov-report=term-missing --cov-fail-under=96
 
       - name: Dependency vulnerability scan (pip-audit)
         # --ignore-vuln entries are advisories with no published fix version

@@ -121,7 +121,7 @@ The original 38 ISCs described the project as it stood at Day 2. Day 79's re-aud
 - [x] ISC-40: Trailing stop — `TRAILING_STOP_PCT` (Day 69), when set, exits a position on a pullback from its peak price since entry, checked before the fixed stop-loss/take-profit thresholds and only once the peak has moved above entry
 - [x] ISC-41: Config validation at load time — `Config.validate()` (Day 73) rejects out-of-range or contradictory tunables (e.g. `MIN_TRADE_AMOUNT > MAX_TRADE_AMOUNT`) at startup via `health.run_checks()`, before any trading cycle runs
 - [x] ISC-42: Positions reconciliation — `scripts/reconcile_positions.py` (Day 74) diffs live Kraken holdings against `positions.json` and reports (Telegram-alerts, unless `--no-alert`) any coin held on one side but not the other
-- [x] ISC-43: Test coverage measured and enforced — `make coverage` (Day 72) scopes to bot source via `.coveragerc`; CI fails the build if overall coverage drops below 95% (Day 83)
+- [x] ISC-43: Test coverage measured and enforced — `make coverage` (Day 72) scopes to bot source via `.coveragerc`; CI fails the build if overall coverage drops below 96% (Day 83, raised from 95% on Day 94)
 - [x] ISC-44: Automated dependency update PRs — `.github/dependabot.yml` (Day 76) proposes weekly grouped minor/patch updates for the `pip` ecosystem, gated by the same CI (pytest + `pip-audit`) as any human-authored PR
 
 ### Anti-criteria
@@ -164,7 +164,7 @@ The original 38 ISCs described the project as it stood at Day 2. Day 79's re-aud
 | ISC-40 | code | trailing-stop unit tests cover peak-tracking, the losing-exit branch, and the never-ran-up no-op case | tests pass | `pytest tests/test_trailing_stop.py` |
 | ISC-41 | bash | `Config.validate()` raises on `MIN_TRADE_AMOUNT > MAX_TRADE_AMOUNT`; `health.run_checks()` exits 1 | tests pass, exit 1 | `pytest tests/test_config_validation.py` |
 | ISC-42 | bash | `scripts/reconcile_positions.py` reports a synthetic coin-only-in-Kraken and coin-only-in-positions.json case | both reported | `pytest tests/test_reconcile_positions.py` |
-| ISC-43 | bash | `make coverage` reports ≥95% overall; CI fails on a synthetic drop below it | ≥95%, gate fires | `make coverage ; gh run list` |
+| ISC-43 | bash | `make coverage` reports ≥96% overall; CI fails on a synthetic drop below it | ≥96%, gate fires | `make coverage ; gh run list` |
 | ISC-44 | file | `.github/dependabot.yml` is valid YAML and triggers a real Dependabot workflow run after push | run observed | `python3 -c "import yaml..." ; gh api .../actions/runs` |
 | ISC-33 | scan | no auto-commit script anywhere in repo | none | `grep -r "git commit" scripts/` |
 | ISC-34 | scan | no committed file contains a real secret-shaped value | none | `git log -p \| grep` |
