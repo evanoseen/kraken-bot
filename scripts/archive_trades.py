@@ -61,7 +61,8 @@ def archive_csv(path: Path, cutoff: datetime, archive_path: Path, dry_run: bool)
         return 0, 0
     header, body = rows[0], rows[1:]
 
-    kept, archived = [], []
+    kept: list[list[str]] = []
+    archived: list[list[str]] = []
     for row in body:
         ts = _parse_timestamp(row[0]) if row else None
         (archived if ts is not None and ts < cutoff else kept).append(row)
@@ -93,7 +94,8 @@ def archive_jsonl(path: Path, cutoff: datetime, archive_path: Path, dry_run: boo
     if not path.exists():
         return 0, 0
 
-    kept_lines, archived_lines = [], []
+    kept_lines: list[str] = []
+    archived_lines: list[str] = []
     with path.open() as f:
         for raw_line in f:
             line = raw_line.rstrip("\n")
