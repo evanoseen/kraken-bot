@@ -17,6 +17,7 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 - **Config validation at startup** — Contradictory or out-of-range tunables (e.g. `MIN_TRADE_AMOUNT` above `MAX_TRADE_AMOUNT`) fail loud before the first cycle instead of producing confusing behavior downstream
 - **Daily loss limit + drawdown circuit breaker** — Halts trading for the day on either a fixed CAD loss or a percentage drawdown from the session peak
 - **Trailing stop** — Optional; locks in gains by exiting on a pullback from the position's peak price, not just a fixed take-profit target
+- **Signal-driven reversal exit** — Exits a held position immediately if this cycle's news/pump signal batch reverses on that coin, regardless of P&L — the one exit path that isn't price-driven
 - **Balance reserve floor** — A configurable CAD amount the bot will never trade with
 - **Per-coin blacklist, per-coin trade cap, and post-trade cooldown** — Prevents hammering the same ticker across cycles
 - **Max open positions + max trades per day** — Hard ceilings independent of signal confidence
@@ -33,7 +34,7 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 - **Rotating log file + retry/backoff + rate limiting** — `bot.log` caps at 5MB × 5 backups; Kraken API calls retry on transient errors and stay under 1/sec
 - **One-command deploy** — `make deploy` tests, rsyncs, restarts the service, and verifies the heartbeat advanced before declaring success
 - **CI on every push** — pytest, a `pip-audit` dependency vulnerability scan, and Dependabot-proposed dependency updates
-- **Test coverage tracked** — `make coverage`; the whole codebase sits at 98%+ as of Day 81
+- **Test coverage tracked** — `make coverage`; the whole codebase sits at 97%+, against a CI gate of 96% (raised from 95% on Day 94 once 98%+ had held stable for ten days)
 
 ## How It Works
 
@@ -43,7 +44,8 @@ Every `RUN_INTERVAL_MINUTES` (default 15) the bot:
 3. Scans Kraken's blog for new coin listings → buys watchlisted coins immediately
 4. Detects volume spikes across all tradable coins
 5. Fetches new crypto headlines and sends them to Claude AI for signal extraction
-6. Merges signals, applies every risk gate (blacklist, cooldown, position caps, sizing), and places market orders
+6. Exits any held position whose original buy thesis reverses in this cycle's signal batch
+7. Merges remaining signals, applies every risk gate (blacklist, cooldown, position caps, sizing), and places market orders
 
 Full stage-by-stage detail, confidence math, and the exact sizing formula live in [STRATEGY.md](STRATEGY.md).
 
@@ -117,7 +119,7 @@ cp .env.example .env
 $EDITOR .env
 ```
 
-Fill in `KRAKEN_API_KEY`, `KRAKEN_PRIVATE_KEY`, and `ANTHROPIC_API_KEY`; everything else has a safe default. [.env.example](.env.example) documents all 26 variables the bot reads — it's kept in exact sync with the code by [tests/test_env_example.py](tests/test_env_example.py), so it's always current.
+Fill in `KRAKEN_API_KEY`, `KRAKEN_PRIVATE_KEY`, and `ANTHROPIC_API_KEY`; everything else has a safe default. [.env.example](.env.example) documents all 27 variables the bot reads — it's kept in exact sync with the code by [tests/test_env_example.py](tests/test_env_example.py), so it's always current.
 
 Set `DRY_RUN=false` to go live, only after watching at least one full dry-run cycle in the logs. Contradictory values (e.g. `MIN_TRADE_AMOUNT` above `MAX_TRADE_AMOUNT`) are rejected at startup with a clear error rather than failing silently mid-cycle.
 
@@ -221,7 +223,7 @@ kraken-bot/
 │   ├── reconcile_positions.py   # Diffs positions.json against live Kraken holdings (run on-VPS)
 │   └── deploy.sh                # test → rsync → restart → verify heartbeat
 │
-├── tests/                        # 52 test files / 466 tests, run with `make test` / `pytest`
+├── tests/                        # 57 test files / 480 tests, run with `make test` / `pytest`
 ├── Makefile                      # help/test/coverage/run/dry/deploy/logs/restart/status
 ├── .coveragerc                   # Coverage scope — excludes tests/, venv/, site-packages
 ├── .github/workflows/test.yml    # CI: pytest + pip-audit on every push
@@ -253,7 +255,7 @@ This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to 
 - tenacity — retry/backoff on Kraken API calls
 - requests — Telegram + Kraken connectivity check
 - python-dotenv — `.env` loading
-- pytest / pytest-mock / pytest-cov — 52 test files (466 tests), run in CI on every push
+- pytest / pytest-mock / pytest-cov — 57 test files (480 tests), run in CI on every push
 - pip-audit — dependency vulnerability scanning in CI
 - Dependabot — weekly grouped dependency update PRs
-- mypy — type checking locked on `kraken_client.py`, `trader.py`, `config.py`, `notifier.py`, `status.py`, and `blacklist.py`
+- mypy — type checking locked (mypy-clean + full-annotation AST audit) across all 27 source files, repo root and `scripts/` alike, via the `tests/test_*_types.py` suite
