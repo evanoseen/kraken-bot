@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import sys
 import pytest
+import requests
 import health
 
 
@@ -118,3 +119,42 @@ def test_valid_config_does_not_exit(mocker):
     mocker.patch("health._check_kraken_connectivity", return_value=True)
     health.run_checks(cfg)  # should not raise
     cfg.validate.assert_called_once()
+
+
+# ── Day 98: _check_kraken_connectivity itself, not just the mocked-out stand-in ──
+# Every test above patches health._check_kraken_connectivity wholesale, so its
+# actual requests.get/response-shape/exception handling had never been
+# exercised — the same "mocked everywhere else" gap Days 77/78 found in
+# pump_detector.py/listing_monitor.py/positions.py.
+
+def test_check_kraken_connectivity_true_on_ok_response(mocker):
+    resp = mocker.Mock(ok=True)
+    resp.json.return_value = {"error": [], "result": {"unixtime": 1}}
+    mocker.patch("health.requests.get", return_value=resp)
+    assert health._check_kraken_connectivity() is True
+
+
+def test_check_kraken_connectivity_false_on_non_ok_response(mocker):
+    resp = mocker.Mock(ok=False)
+    resp.json.return_value = {"error": []}
+    mocker.patch("health.requests.get", return_value=resp)
+    assert health._check_kraken_connectivity() is False
+
+
+def test_check_kraken_connectivity_false_when_kraken_reports_error(mocker):
+    resp = mocker.Mock(ok=True)
+    resp.json.return_value = {"error": ["EGeneral:Internal error"]}
+    mocker.patch("health.requests.get", return_value=resp)
+    assert health._check_kraken_connectivity() is False
+
+
+def test_check_kraken_connectivity_false_on_request_exception(mocker):
+    mocker.patch("health.requests.get", side_effect=requests.exceptions.ConnectionError("no route"))
+    assert health._check_kraken_connectivity() is False
+
+
+def test_check_kraken_connectivity_false_on_malformed_json(mocker):
+    resp = mocker.Mock(ok=True)
+    resp.json.side_effect = ValueError("not json")
+    mocker.patch("health.requests.get", return_value=resp)
+    assert health._check_kraken_connectivity() is False
