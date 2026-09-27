@@ -2,8 +2,10 @@
 
 Covers the import-safe, network-free core: loading JSONL (incl. missing/empty/
 malformed files), per-day aggregation of buy/sell counts + net cash flow +
-realized PnL, total realized PnL, and the assembled report text. The live
-Kraken balance fetch is intentionally not exercised here.
+realized PnL, total realized PnL, and the assembled report text. `fetch_balance`
+(Day 99) is covered too, by patching `kraken_client.get_client`/`get_balance`
+directly rather than `daily_pnl.fetch_balance` itself, so its lazy-import +
+try/except body actually runs under test.
 """
 from __future__ import annotations
 
@@ -13,6 +15,8 @@ import json
 from pathlib import Path
 
 import pytest
+
+import kraken_client
 
 # Load scripts/daily_pnl.py by path (the scripts/ dir isn't a package).
 _MODULE_PATH = Path(__file__).resolve().parent.parent / "scripts" / "daily_pnl.py"
@@ -146,3 +150,37 @@ def test_main_since_after_until_errors(tmp_path, sample_trades):
     p = _write_jsonl(tmp_path / "trades.jsonl", sample_trades)
     with pytest.raises(SystemExit):
         daily_pnl.main(["--file", str(p), "--no-balance", "--since", "2026-06-18", "--until", "2026-06-17"])
+
+
+# ── Day 99: fetch_balance's real Kraken call path ───────────────────────────
+#
+# Prior test runs only ever called daily_pnl.main with --no-balance, so
+# fetch_balance()'s own body (lazy import, get_client()/get_balance() call,
+# the report-only except) had never executed under test at all — the same
+# "mocked/skipped past the real logic" shape Day 98 found in health.py's
+# _check_kraken_connectivity. Patching kraken_client.get_client/get_balance
+# (not daily_pnl.fetch_balance itself) exercises the real function body.
+
+def test_fetch_balance_returns_live_balance(mocker):
+    mock_client = mocker.Mock()
+    mocker.patch.object(kraken_client, "get_client", return_value=mock_client)
+    mocker.patch.object(kraken_client, "get_balance", return_value=87.65)
+    assert daily_pnl.fetch_balance() == 87.65
+
+
+def test_fetch_balance_returns_none_on_failure(mocker, capsys):
+    mocker.patch.object(kraken_client, "get_client", side_effect=RuntimeError("no API key"))
+    assert daily_pnl.fetch_balance() is None
+    err = capsys.readouterr().err
+    assert "could not fetch Kraken balance" in err
+    assert "no API key" in err
+
+
+def test_main_includes_live_balance_when_not_skipped(tmp_path, sample_trades, capsys, mocker):
+    mocker.patch.object(kraken_client, "get_client", return_value=mocker.Mock())
+    mocker.patch.object(kraken_client, "get_balance", return_value=200.0)
+    p = _write_jsonl(tmp_path / "trades.jsonl", sample_trades)
+    rc = daily_pnl.main(["--file", str(p)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Current Kraken balance: 200.00 CAD" in out
