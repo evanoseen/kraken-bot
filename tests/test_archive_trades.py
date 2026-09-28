@@ -22,6 +22,12 @@ NOW = datetime(2026, 8, 5, tzinfo=timezone.utc)
 OLD = (NOW - timedelta(days=120)).isoformat()
 RECENT = (NOW - timedelta(days=1)).isoformat()
 
+# positions.log_trade actually writes `datetime.utcnow().isoformat()` — a
+# naive timestamp with no tzinfo, unlike every fixture above which uses an
+# aware one. These match that real shape.
+OLD_NAIVE = (NOW - timedelta(days=120)).replace(tzinfo=None).isoformat()
+RECENT_NAIVE = (NOW - timedelta(days=1)).replace(tzinfo=None).isoformat()
+
 
 def _write_csv(path: Path, rows: list[list[str]]) -> Path:
     with path.open("w", newline="") as f:
@@ -39,6 +45,68 @@ def _write_jsonl(path: Path, events: list[dict]) -> Path:
 @pytest.fixture
 def cutoff():
     return NOW - timedelta(days=90)
+
+
+# ─── Day 100: _parse_timestamp direct tests ────────────────────────────────
+#
+# Every test above builds fixtures with an aware (tzinfo=timezone.utc)
+# timestamp. Real trades.csv/trades.jsonl rows never look like that —
+# positions.log_trade writes `datetime.utcnow().isoformat()`, which is
+# naive. _parse_timestamp's docstring says it's designed to treat a naive
+# value as UTC for exactly that reason, but nothing had ever called it with
+# one: the naive-to-aware branch, and the malformed/wrong-type branch, were
+# both untested even though archive_csv/archive_jsonl route every row
+# through this function.
+
+
+def test_parse_timestamp_naive_string_is_treated_as_utc():
+    result = archive_trades._parse_timestamp(RECENT_NAIVE)
+    assert result is not None
+    assert result.tzinfo == timezone.utc
+    assert result == NOW - timedelta(days=1)
+
+
+def test_parse_timestamp_aware_string_is_returned_unchanged():
+    result = archive_trades._parse_timestamp(RECENT)
+    assert result == NOW - timedelta(days=1)
+
+
+def test_parse_timestamp_malformed_string_returns_none():
+    assert archive_trades._parse_timestamp("not-a-timestamp") is None
+
+
+def test_parse_timestamp_wrong_type_returns_none():
+    # A malformed-but-valid JSONL row can hand this a non-string (e.g. a
+    # bare numeric timestamp instead of an ISO string), which raises
+    # TypeError rather than ValueError inside datetime.fromisoformat.
+    assert archive_trades._parse_timestamp(12345) is None  # type: ignore[arg-type]
+
+
+def test_archive_csv_naive_production_format_timestamps_split_correctly(tmp_path, cutoff):
+    """Real trades.csv rows carry naive timestamps (positions.log_trade uses
+    datetime.utcnow().isoformat()). Every other archive_csv test uses an
+    aware fixture — this proves the cutoff comparison actually works
+    against what production really writes, not just synthetic tz-aware
+    data."""
+    src = _write_csv(tmp_path / "trades.csv", [
+        [OLD_NAIVE, "DOGE", "buy_signal", "0.1", "10.00", ""],
+        [RECENT_NAIVE, "SHIB", "sell_takeprofit", "0.00001", "12.00", "2.00"],
+    ])
+    archive = tmp_path / "archive.csv"
+
+    archived, kept = archive_trades.archive_csv(src, cutoff, archive, dry_run=False)
+
+    assert (archived, kept) == (1, 1)
+    with src.open() as f:
+        rows = list(csv.reader(f))
+    assert rows[1][1] == "SHIB"
+
+
+def test_archive_csv_completely_empty_file_is_a_noop(tmp_path, cutoff):
+    src = tmp_path / "trades.csv"
+    src.write_text("")
+    archived, kept = archive_trades.archive_csv(src, cutoff, tmp_path / "arc.csv", dry_run=False)
+    assert (archived, kept) == (0, 0)
 
 
 def test_archive_csv_splits_old_from_recent(tmp_path, cutoff):
@@ -107,6 +175,16 @@ def test_archive_jsonl_splits_old_from_recent(tmp_path, cutoff):
     assert kept_events == [{"timestamp": RECENT, "coin": "SHIB", "side": "sell"}]
     archived_events = [json.loads(l) for l in archive.read_text().splitlines()]
     assert archived_events == [{"timestamp": OLD, "coin": "DOGE", "side": "buy"}]
+
+
+def test_archive_jsonl_no_old_lines_leaves_file_untouched(tmp_path, cutoff):
+    src = _write_jsonl(tmp_path / "trades.jsonl", [{"timestamp": RECENT, "coin": "DOGE"}])
+    archive = tmp_path / "archive.jsonl"
+
+    archived, kept = archive_trades.archive_jsonl(src, cutoff, archive, dry_run=False)
+
+    assert (archived, kept) == (0, 1)
+    assert not archive.exists()
 
 
 def test_archive_jsonl_keeps_malformed_lines_in_live_file(tmp_path, cutoff):
