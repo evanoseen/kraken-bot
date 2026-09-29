@@ -120,3 +120,12 @@ def test_default_threshold_is_2x_run_interval(monkeypatch):
     import config
     importlib.reload(config)
     assert check_heartbeat._default_threshold_minutes() == 30
+
+
+def test_default_threshold_falls_back_when_config_unavailable(monkeypatch):
+    # Simulates running on a machine without the bot's own environment set
+    # up (config.py's `cfg` singleton missing or broken) — the exact case
+    # this function's own docstring names as its reason to exist.
+    import config
+    monkeypatch.delattr(config, "cfg", raising=False)
+    assert check_heartbeat._default_threshold_minutes() == 30.0

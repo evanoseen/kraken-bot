@@ -77,10 +77,10 @@ def find_pumping_coins(client: krakenex.API, min_volume_multiplier: float = 2.0,
             if avg_daily_volume_usd > 5_000_000:  # skip anything doing >$5M/day normally
                 continue
 
-            # Volume spike ratio — today vs average hourly rate
+            # Volume spike ratio — today vs average hourly rate.
+            # avg_hourly is always > 0 here: the volume_24h <= 0 guard above
+            # already rules out a zero or negative value.
             avg_hourly = volume_24h / 24
-            if avg_hourly <= 0:
-                continue
             spike_ratio = volume_today / avg_hourly
 
             # Price move off the low
