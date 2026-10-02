@@ -173,24 +173,19 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager | 
 4. If no fixed version exists yet: check whether the vulnerable code path is even reachable by this bot (e.g., a vuln in an HTTP server component of a library only used as a client). Add `--ignore-vuln <ID>` to the CI step (`.github/workflows/test.yml`) with a one-line comment reason, and log it in the table below. Re-check `pip index versions` for that package at the next audit — once a fix ships, remove the ignore and bump.
 5. Never widen an ignore to a whole package or a version range — one `--ignore-vuln <ID>` per advisory, so a *different* future CVE in the same package still fails the build.
 
-### Currently ignored (no fix published yet — checked 2026-08-04)
+### Currently ignored (none, as of Day 104 — re-audited 2026-10-02)
 
-| ID | Package | Installed | Reachable from this bot? | Revisit |
-|----|---------|-----------|---------------------------|---------|
-| PYSEC-2026-2275 | requests | 2.32.5 | Yes — direct runtime dep (Kraken/Telegram/Anthropic HTTP calls) | Every audit |
-| PYSEC-2026-142, PYSEC-2026-141 | urllib3 | 2.6.3 | Transitive via `requests` | Every audit |
-| PYSEC-2026-2270 | python-dotenv | 1.2.1 | Yes — loads `.env`, never parses untrusted input | Every audit |
-| PYSEC-2026-1845 | pytest | 8.4.2 | No — test-only, never runs on the VPS | Every audit — as of Day 86, pytest 9.x exists on PyPI (Day 58's "no fix published" is no longer true) but requires Python >=3.10, which this project can't take yet (see "Upper-bound pins" above) — still correctly ignored, for a different reason than originally recorded |
-| GHSA-6v7p-g79w-8964 | msgpack | 1.1.2 | No — transitive via `pip-audit`'s own CI-only dependency (`CacheControl`), not installed on the VPS | Every audit |
-| PYSEC-2026-1375, PYSEC-2026-1374 | filelock | 3.19.1 | No — transitive via `pip-audit`, CI-only | Every audit |
+The 8 advisories this table used to list (`PYSEC-2026-2275` on `requests`, `PYSEC-2026-142`/`PYSEC-2026-141` on `urllib3`, `PYSEC-2026-2270` on `python-dotenv`, `PYSEC-2026-1845` on `pytest`, `GHSA-6v7p-g79w-8964` on `msgpack`, `PYSEC-2026-1375`/`PYSEC-2026-1374` on `filelock`) were all tied to specific old installed versions (`requests` 2.32.5, `urllib3` 2.6.3, `python-dotenv` 1.2.1, `pytest` 8.4.2, `msgpack` 1.1.2, `filelock` 3.19.1). The Day 86/89/90/97 dependency reviews moved every one of those packages past the affected range in the normal course of routine bumps, not as a deliberate fix for these specific CVEs — nobody had gone back to check whether the ignore list was still earning its keep.
 
-`requests` and `python-dotenv` are the two that matter for the live bot; both are already pinned to their latest available version as the lower bound (with an upper bound added Day 71), so there's nothing more to do until upstream ships an actual fix.
+Re-ran `pip-audit -r requirements.txt` today with **zero** `--ignore-vuln` flags against the current pins (`requests` 2.34.2, `urllib3` 2.8.0, `python-dotenv` 1.2.4, `pytest` 9.1.1, `msgpack` 1.2.3, `filelock` 4.0.9, plus every other direct and transitive dependency): **no known vulnerabilities found**, exit code 0. All 8 `--ignore-vuln` flags were removed from `.github/workflows/test.yml`'s pip-audit step accordingly — keeping them would have been dead weight, and this project's own policy (point 5 above) is to keep the ignore list precise rather than let entries accumulate past their relevance.
+
+If a future audit finds something real again, add it back here with the same ID → package → reachability → revisit-date shape this table used before.
 
 ### Upper-bound pins (Day 71)
 
 Before Day 71, every line in `requirements.txt` was `package>=X.Y.Z` with no ceiling — a fresh install (a new machine, a rebuilt VPS, CI's own `pip install`) could silently pull a breaking major-version bump with zero warning, even though this section already said to read the changelog before any upgrade. The policy existed; nothing enforced it on first install. That's now fixed: every line has both a lower and an upper bound.
 
-**Bound convention:** one major version above whatever's currently installed (`package>=X.Y.Z,<(X+1).0.0`) — except pre-1.0 packages (currently only `anthropic`, at `0.105.2`), which get bounded at the next **minor** instead (`<0.106.0`), since SemVer treats any `0.x` release as potentially breaking, not just a major bump. `types-requests` is bounded to match `requests`' major, since its version scheme mirrors the package it stubs.
+**Bound convention:** one major version above whatever's currently installed (`package>=X.Y.Z,<(X+1).0.0`) — except pre-1.0 packages, which get bounded at the next **minor** instead (`<0.X+1.0`), since SemVer treats any `0.x` release as potentially breaking, not just a major bump. (No currently-pinned package is pre-1.0 as of Day 104 — `anthropic` was the one example when this convention was written, but Day 90 bumped it across that exact boundary to `1.x`, so the rule is recorded here for whenever a pre-1.0 dependency gets added again, not as a description of today's `requirements.txt`.) `types-requests` is bounded to match `requests`' major, since its version scheme mirrors the package it stubs.
 
 **Bump procedure** — one dependency per commit, never batch:
 ```bash
