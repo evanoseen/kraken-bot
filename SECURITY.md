@@ -273,6 +273,8 @@ ssh root@204.168.204.221 'cat /root/kraken-bot/positions.json'                  
 ssh root@204.168.204.221 'cat /root/kraken-bot/trades.csv'                             > trades.csv
 ssh root@204.168.204.221 'cat /root/kraken-bot/trades.jsonl'                           > trades.jsonl
 ssh root@204.168.204.221 'cat /root/kraken-bot/status.json'                            > status.json
+ssh root@204.168.204.221 'cat /root/kraken-bot/seen_listings.json'                     > seen_listings.json
+ssh root@204.168.204.221 'cat /root/kraken-bot/last_run.txt'                           > last_run.txt
 ssh root@204.168.204.221 'cat /root/kraken-bot/reconcile.log 2>/dev/null'              > reconcile.log
 ssh root@204.168.204.221 'last -n 50'                                                  > logins.log
 ssh root@204.168.204.221 'ps auxf'                                                     > processes.txt
@@ -289,6 +291,8 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager'  
 - Search `journal.log` for unexpected coins, oversized orders, or sells you did not authorize.
 - Search `logins.log` and `ssh.log` for SSH sessions from unknown IPs.
 - Search `processes.txt` for anything that is not `python main.py`, `sshd`, or the standard Ubuntu services.
+- Check `last_run.txt`'s timestamp against the incident window — a heartbeat that stopped advancing before the suspicious activity started points at a hung/crashed process rather than a live compromise; one that kept advancing throughout points the other way.
+- Check `seen_listings.json` for entries that don't correspond to anything in the Kraken blog RSS feed — a tampered dedup file could suppress or force-replay a listing-monitor buy.
 
 #### Phase 4 — RECOVER
 - If keys were compromised: rotate (see section 2), re-deploy, then re-enable trading.
