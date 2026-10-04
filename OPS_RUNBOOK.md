@@ -443,6 +443,9 @@ A quick map so you do not have to remember.
 ├── positions.json          # open positions (auto-managed)
 ├── seen_listings.json      # listing IDs already actioned
 ├── trades.csv              # trade history (append-only)
+├── trades.jsonl            # trade history, JSONL shape (Day 20, append-only)
+├── status.json             # latest_status.json successor (Day 26/45, polled instead of SSH)
+├── last_run.txt            # heartbeat timestamp (Day 21)
 └── bot.log                 # local logger output
 
 /etc/systemd/system/
