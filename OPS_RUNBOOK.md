@@ -449,7 +449,7 @@ A quick map so you do not have to remember.
 └── bot.log                 # local logger output
 
 /etc/systemd/system/
-└── kraken-bot.service      # systemd unit (Day 30 backlog: commit a copy to deploy/)
+└── kraken-bot.service      # systemd unit (Day 56 backlog: commit a copy to deploy/, still blocked on VPS SSH access)
 ```
 
 ---
