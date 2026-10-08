@@ -53,6 +53,16 @@ def test_sends_stoploss_with_pnl(telegram_env, mocker):
     assert "-$1.30" in payload["text"]
 
 
+def test_sends_takeprofit_with_positive_pnl(telegram_env, mocker):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = True
+    post = mocker.patch("notifier.requests.post", return_value=mock_resp)
+    notifier.notify_trade("sell_takeprofit", "DOGE", 15.00, 0.09, pnl=2.75)
+    payload = post.call_args.kwargs["json"]
+    assert "TAKE-PROFIT" in payload["text"]
+    assert "+$2.75" in payload["text"]
+
+
 def test_network_error_is_non_fatal(telegram_env, mocker):
     mocker.patch("notifier.requests.post", side_effect=requests.ConnectionError("offline"))
     notifier.notify_trade("buy_signal", "DOGE", 10.0, 0.05)
@@ -114,6 +124,18 @@ def test_shutdown_network_error_is_non_fatal(telegram_env, mocker):
     notifier.notify_shutdown(1, 1, 0, 50.0, "SIGINT")
 
 
+def test_shutdown_bad_http_status_logs_warning(telegram_env, mocker, caplog):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = False
+    mock_resp.status_code = 500
+    mock_resp.text = "Internal Server Error"
+    mocker.patch("notifier.requests.post", return_value=mock_resp)
+    import logging
+    with caplog.at_level(logging.WARNING, logger="notifier"):
+        notifier.notify_shutdown(2, 1, 1, 75.0, "SIGTERM")
+    assert "500" in caplog.text
+
+
 def test_heartbeat_stale_no_op_when_token_missing(monkeypatch, mocker):
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
@@ -145,6 +167,18 @@ def test_heartbeat_missing_sends_missing_message(telegram_env, mocker):
 def test_heartbeat_stale_network_error_is_non_fatal(telegram_env, mocker):
     mocker.patch("notifier.requests.post", side_effect=requests.ConnectionError("offline"))
     notifier.notify_heartbeat_stale(60.0, 30.0)
+
+
+def test_heartbeat_stale_bad_http_status_logs_warning(telegram_env, mocker, caplog):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = False
+    mock_resp.status_code = 403
+    mock_resp.text = "Forbidden"
+    mocker.patch("notifier.requests.post", return_value=mock_resp)
+    import logging
+    with caplog.at_level(logging.WARNING, logger="notifier"):
+        notifier.notify_heartbeat_stale(45.0, 30.0)
+    assert "403" in caplog.text
 
 
 def test_reconciliation_no_op_when_token_missing(monkeypatch, mocker):
@@ -188,3 +222,15 @@ def test_reconciliation_reports_both_directions(telegram_env, mocker):
 def test_reconciliation_network_error_is_non_fatal(telegram_env, mocker):
     mocker.patch("notifier.requests.post", side_effect=requests.ConnectionError("offline"))
     notifier.notify_reconciliation_mismatch(["DOGE"], [])
+
+
+def test_reconciliation_bad_http_status_logs_warning(telegram_env, mocker, caplog):
+    mock_resp = mocker.Mock()
+    mock_resp.ok = False
+    mock_resp.status_code = 429
+    mock_resp.text = "Too Many Requests"
+    mocker.patch("notifier.requests.post", return_value=mock_resp)
+    import logging
+    with caplog.at_level(logging.WARNING, logger="notifier"):
+        notifier.notify_reconciliation_mismatch(["DOGE"], ["PEPE"])
+    assert "429" in caplog.text
