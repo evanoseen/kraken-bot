@@ -8,6 +8,13 @@ Three behaviors pinned:
 
 trader.run_trading_cycle and heartbeat.write_heartbeat are always mocked so no
 real trading, Kraken calls, or filesystem writes happen in these tests.
+
+health.run_checks is also mocked (Day 111): it otherwise calls sys.exit(1) on
+missing KRAKEN_API_KEY/KRAKEN_PRIVATE_KEY/ANTHROPIC_API_KEY env vars, which CI
+supplies as placeholders (.github/workflows/test.yml) but a plain local/sandbox
+run does not -- these tests were failing with SystemExit(1) in any environment
+without those vars set, never reaching the --once/--dry-run logic they exist
+to test.
 """
 from __future__ import annotations
 
@@ -30,6 +37,7 @@ def restore_dry_run_env():
 @pytest.fixture()
 def patched(mocker):
     """Patch the cycle internals and schedule so tests never block or trade."""
+    mocker.patch("health.run_checks")
     mock_cycle = mocker.patch("trader.run_trading_cycle")
     mock_heartbeat = mocker.patch("heartbeat.write_heartbeat")
     mock_every = mocker.patch("schedule.every")
