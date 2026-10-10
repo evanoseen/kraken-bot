@@ -34,7 +34,7 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 - **Rotating log file + retry/backoff + rate limiting** — `bot.log` caps at 5MB × 5 backups; Kraken API calls retry on transient errors and stay under 1/sec
 - **One-command deploy** — `make deploy` tests, rsyncs, restarts the service, and verifies the heartbeat advanced before declaring success
 - **CI on every push** — pytest, a `pip-audit` dependency vulnerability scan, and Dependabot-proposed dependency updates
-- **Test coverage tracked** — `make coverage`; the whole codebase sits at 97%+, against a CI gate of 96% (raised from 95% on Day 94 once 98%+ had held stable for ten days)
+- **Test coverage tracked** — `make coverage`; the whole codebase sits at 99%+, against a CI gate of 97% (raised 95% → 96% on Day 94, then → 97% on Day 112 once 99%+ had held stable for two-plus weeks)
 
 ## How It Works
 

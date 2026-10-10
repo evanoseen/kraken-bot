@@ -44,12 +44,20 @@ jobs:
         # this keeps roughly the same buffer against the current baseline
         # rather than leaving the gate static while real coverage climbed.
         #
+        # Day 112: raised 96 -> 97. Real coverage climbed further and held at
+        # 99%+ for the two+ weeks since Day 94 (99.16% from Day 95 through
+        # Day 109, 99.44% on Day 110, 99.58% as of Day 111/502 tests) — the
+        # same "genuinely improved and stayed there" condition Day 94's own
+        # comment names, verified again rather than assumed: a synthetic drop
+        # (temporarily removing tests/test_trader_coverage_gaps.py) failed
+        # the gate as expected (96.50%, below 97) before this change landed.
+        #
         # Raise this number when coverage genuinely improves and stays there
         # for a few days — never lower it to make a failing PR pass. If a
         # legitimate change needs new, not-yet-tested code (a fresh module,
         # a large refactor mid-flight), that's a signal to add tests in the
         # same PR, not to loosen the gate.
-        run: pytest -v --cov=. --cov-report=term-missing --cov-fail-under=96
+        run: pytest -v --cov=. --cov-report=term-missing --cov-fail-under=97
 
       - name: Dependency vulnerability scan (pip-audit)
         # Day 104: the 8 --ignore-vuln entries this step carried since Day 58

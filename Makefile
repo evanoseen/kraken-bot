@@ -26,7 +26,8 @@ test:
 #
 # Day 83: CI runs this same scope with --cov-fail-under (see
 # .github/workflows/test.yml for the current threshold, raised 95 -> 96 on
-# Day 94) on every push — raise it further when coverage improves and
+# Day 94, then 96 -> 97 on Day 112) on every push — raise it further when
+# coverage improves and
 # holds; never lower it to pass a PR.
 coverage:
 	$(VENV)/python3 -m pytest --cov=. --cov-report=term-missing -q
