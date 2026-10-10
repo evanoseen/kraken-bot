@@ -798,6 +798,8 @@ Verified for real in the Python 3.11 venv built this session (system Python here
 
 This also retires a specific piece of standing language this file and `JOURNAL.md` have repeated in nearly every Result/Next note since Day 66 ("same 7 pre-existing `test_cli_flags.py` failures") — future survey days should see a clean `0 failed` and can drop that caveat rather than carrying it forward out of habit.
 
+**Result (2026-10-09), CI confirmation:** Workflow run `37936658105` (commit `ba50cc6`) completed with `conclusion: "success"` on GitHub Actions' own runner — confirmed via the GitHub MCP tools, closing the standing per-commit verification gap tracked since Day 56, same as Days 97/102/107/108/109/110 did for theirs.
+
 ---
 
 ## Status note (added Day 112, 2026-10-10)
@@ -822,4 +824,4 @@ Verified for real with the CI-equivalent local run after all edits, in the Pytho
 
 Not verified from this sandbox (same standing category as Day 56/57/86/87/90/94-111): whether the raised gate (`--cov-fail-under=97`) actually goes green on GitHub Actions' own runner once pushed — the local Python 3.11 venv run above is the CI-equivalent proxy this project has used every time real CI access wasn't available, not a substitute for watching the actual workflow run; will confirm via the GitHub MCP tools after pushing, same as every recent day has.
 
-**Result (2026-10-09), CI confirmation:** Workflow run `37936658105` (commit `ba50cc6`) completed with `conclusion: "success"` on GitHub Actions' own runner — confirmed via the GitHub MCP tools, closing the standing per-commit verification gap tracked since Day 56, same as Days 97/102/107/108/109/110 did for theirs.
+**Result (2026-10-10), CI confirmation:** Workflow run `38054661270` (commit `2e3083f`) completed with `conclusion: "success"` on GitHub Actions' own runner — confirmed via the GitHub MCP tools, closing the standing per-commit verification gap tracked since Day 56, same as Days 97/102/107/108/109/110/111 did for theirs.
