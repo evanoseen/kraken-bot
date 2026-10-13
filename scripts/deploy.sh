@@ -23,6 +23,9 @@ echo "==> Running test suite..."
 venv/bin/python3 -m pytest -q
 
 echo "==> Capturing pre-deploy heartbeat..."
+# shellcheck disable=SC2029 # REMOTE_DIR is this script's own constant, not
+# remote/user input -- client-side expansion before the command reaches the
+# remote shell is exactly what's intended here.
 PRE_HEARTBEAT="$(ssh "$SERVER" "cat $REMOTE_DIR/last_run.txt 2>/dev/null || echo none")"
 echo "    pre-deploy heartbeat: $PRE_HEARTBEAT"
 
@@ -38,6 +41,7 @@ elapsed=0
 while (( elapsed < HEARTBEAT_TIMEOUT )); do
   sleep "$POLL_INTERVAL"
   elapsed=$((elapsed + POLL_INTERVAL))
+  # shellcheck disable=SC2029 # same intentional client-side expansion as above
   current_heartbeat="$(ssh "$SERVER" "cat $REMOTE_DIR/last_run.txt 2>/dev/null || echo none")"
   if [[ "$current_heartbeat" != "$PRE_HEARTBEAT" && "$current_heartbeat" != "none" ]]; then
     echo "==> Heartbeat advanced: $PRE_HEARTBEAT -> $current_heartbeat"

@@ -33,7 +33,7 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 - **Structured trade log** — Every trade appended to both `trades.csv` and `trades.jsonl`, with a monthly archive script so neither grows forever
 - **Rotating log file + retry/backoff + rate limiting** — `bot.log` caps at 5MB × 5 backups; Kraken API calls retry on transient errors and stay under 1/sec
 - **One-command deploy** — `make deploy` tests, rsyncs, restarts the service, and verifies the heartbeat advanced before declaring success
-- **CI on every push** — pytest, a `pip-audit` dependency vulnerability scan, and Dependabot-proposed dependency updates
+- **CI on every push** — pytest, a `pip-audit` dependency vulnerability scan, a `shellcheck` pass over `scripts/*.sh`, and Dependabot-proposed dependency updates
 - **Test coverage tracked** — `make coverage`; the whole codebase sits at 99%+, against a CI gate of 97% (raised 95% → 96% on Day 94, then → 97% on Day 112 once 99%+ had held stable for two-plus weeks)
 
 ## How It Works
@@ -226,7 +226,7 @@ kraken-bot/
 ├── tests/                        # 58 test files / 502 tests, run with `make test` / `pytest`
 ├── Makefile                      # help/test/coverage/run/dry/deploy/logs/restart/status
 ├── .coveragerc                   # Coverage scope — excludes tests/, venv/, site-packages
-├── .github/workflows/test.yml    # CI: pytest + pip-audit on every push
+├── .github/workflows/test.yml    # CI: pytest + pip-audit + shellcheck on every push
 ├── .github/dependabot.yml        # Weekly grouped dependency update PRs
 └── requirements.txt
 ```
@@ -257,5 +257,6 @@ This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to 
 - python-dotenv — `.env` loading
 - pytest / pytest-mock / pytest-cov — 58 test files (502 tests), run in CI on every push
 - pip-audit — dependency vulnerability scanning in CI
+- shellcheck — static analysis for `scripts/*.sh` in CI
 - Dependabot — weekly grouped dependency update PRs
 - mypy — type checking locked (mypy-clean + full-annotation AST audit) across all 27 source files, repo root and `scripts/` alike, via the `tests/test_*_types.py` suite

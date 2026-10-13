@@ -71,3 +71,10 @@ jobs:
         # --ignore-vuln only for a real, currently-applicable advisory with no
         # published fix (same procedure as before).
         run: pip-audit -r requirements.txt
+
+      - name: Shell script static analysis (shellcheck)
+        # Day 115: scripts/daily.sh and scripts/deploy.sh (the latter touches
+        # the live VPS) had never had any static analysis -- a scripting bug
+        # would only ever surface by actually running one of them. ubuntu-latest
+        # ships shellcheck preinstalled, so this just wires it in.
+        run: shellcheck scripts/*.sh
