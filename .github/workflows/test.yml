@@ -78,3 +78,13 @@ jobs:
         # would only ever surface by actually running one of them. ubuntu-latest
         # ships shellcheck preinstalled, so this just wires it in.
         run: shellcheck scripts/*.sh
+
+      - name: YAML lint (yamllint)
+        # Day 116: this workflow file and .github/dependabot.yml had never had
+        # any static analysis either -- a malformed dependabot.yml in particular
+        # fails silently (Dependabot just stops running) with no CI signal at
+        # all. ubuntu-latest ships yamllint preinstalled, so this just wires it
+        # in; .yamllint relaxes the two GitHub-Actions-specific false positives
+        # (missing "---", the bare "on:" key) rather than restructuring files
+        # that are already correct.
+        run: yamllint .github/workflows/test.yml .github/dependabot.yml

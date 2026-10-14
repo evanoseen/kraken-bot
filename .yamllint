@@ -1,0 +1,10 @@
+extends: default
+
+rules:
+  # GitHub Actions workflow/config files are single-document by convention
+  # and never carry a "---" marker; flagging it on every push is noise.
+  document-start: disable
+  # The bare `on:` key in workflow files is the correct GitHub Actions
+  # syntax, not a YAML 1.1 boolean typo — don't flag it as one.
+  truthy:
+    check-keys: false
