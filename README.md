@@ -223,7 +223,7 @@ kraken-bot/
 │   ├── reconcile_positions.py   # Diffs positions.json against live Kraken holdings (run on-VPS)
 │   └── deploy.sh                # test → rsync → restart → verify heartbeat
 │
-├── tests/                        # 58 test files / 502 tests, run with `make test` / `pytest`
+├── tests/                        # 59 test files / 504 tests, run with `make test` / `pytest`
 ├── Makefile                      # help/test/coverage/run/dry/deploy/logs/restart/status
 ├── .coveragerc                   # Coverage scope — excludes tests/, venv/, site-packages
 ├── .github/workflows/test.yml    # CI: pytest + pip-audit + shellcheck + yamllint on every push
@@ -255,7 +255,7 @@ This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to 
 - tenacity — retry/backoff on Kraken API calls
 - requests — Telegram + Kraken connectivity check
 - python-dotenv — `.env` loading
-- pytest / pytest-mock / pytest-cov — 58 test files (502 tests), run in CI on every push
+- pytest / pytest-mock / pytest-cov — 59 test files (504 tests), run in CI on every push
 - pip-audit — dependency vulnerability scanning in CI
 - shellcheck — static analysis for `scripts/*.sh` in CI
 - yamllint — static analysis for `.github/workflows/test.yml` and `.github/dependabot.yml` in CI
