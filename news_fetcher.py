@@ -126,7 +126,9 @@ def fetch_twitter_signals(max_per_account: int = 5) -> list:
                         })
                 fetched = True
                 break  # got results from this instance, move to next account
-            except Exception:
+            # Day 118: broad catch is intentional here -- fall through to the
+            # next public Nitter instance on any failure from this one.
+            except Exception:  # nosec B112
                 continue  # try next nitter instance
 
         if not fetched:
@@ -154,7 +156,9 @@ def fetch_top_headlines(max_articles: int = 60) -> list:
                         "summary": entry.get("summary", ""),
                         "source": "news",
                     })
-        except Exception:
+        # Day 118: broad catch is intentional here -- fall through to the
+        # next RSS feed on any failure from this one.
+        except Exception:  # nosec B112
             continue
 
     # Twitter signals — prepend so Claude sees them first (higher priority)

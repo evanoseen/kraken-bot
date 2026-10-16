@@ -72,6 +72,20 @@ jobs:
         # published fix (same procedure as before).
         run: pip-audit -r requirements.txt
 
+      - name: Security static analysis (bandit)
+        # Day 118: pip-audit (Day 58) catches known CVEs in dependencies, but
+        # nothing had ever scanned this project's own code for security-smell
+        # patterns -- hardcoded secrets, insecure subprocess/eval use, broad
+        # excepts masking real failures -- the same kind of silent gap
+        # shellcheck (Day 115) and yamllint (Day 116) closed for their file
+        # types. bandit is a pure-Python tool already pinned in
+        # requirements.txt, so this adds no new non-Python toolchain (unlike
+        # the Ruby-based markdownlint considered and rejected on Day 117).
+        # tests/ is excluded since pytest's own `assert` usage throughout the
+        # suite would otherwise trip B101 on code that was never a security
+        # concern.
+        run: bandit -r . -x ./tests
+
       - name: Shell script static analysis (shellcheck)
         # Day 115: scripts/daily.sh and scripts/deploy.sh (the latter touches
         # the live VPS) had never had any static analysis -- a scripting bug

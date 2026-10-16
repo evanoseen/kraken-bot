@@ -20,6 +20,7 @@ This bot trades real CAD on a Kraken account from a single Hetzner VPS. The blas
 - `.env.example` ships placeholder strings so a new clone never sees a real key.
 - Kraken API keys are scoped to the minimum permissions the bot actually uses: **Query Funds**, **Query Open Orders**, **Modify Orders**, **Create / Cancel Orders**. Withdrawal permissions are **off**.
 - The Anthropic key is per-project and rate-limited at the org level.
+- **`bandit` runs as a SAST scan in CI (Day 118)** against every `.py` file the bot ships (`.github/workflows/test.yml`) — it would catch a hardcoded key or password literal (`B105`/`B106`/`B107`) landing in a commit even if a reviewer missed it, the same automated-gate shape the git-history grep below already uses for keys that slipped through once.
 
 ### Concrete actions
 ```bash
