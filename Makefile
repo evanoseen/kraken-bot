@@ -4,12 +4,13 @@ VENV   := venv/bin
 SERVER := root@204.168.204.221
 REMOTE_DIR := /root/kraken-bot
 
-.PHONY: help test coverage run dry deploy logs restart status
+.PHONY: help test coverage lint run dry deploy logs restart status
 
 help:
 	@echo "kraken-bot make targets:"
 	@echo "  make test      run the pytest suite"
 	@echo "  make coverage  run the suite with a per-file coverage report (Day 72)"
+	@echo "  make lint      run the non-pytest CI gates locally: pip-audit, bandit, shellcheck, yamllint (Day 119)"
 	@echo "  make run       run the bot (scheduler loop, live .env)"
 	@echo "  make dry       run a single cycle with --once --dry-run"
 	@echo "  make deploy    test, rsync to the VPS (excludes .env), restart, verify heartbeat"
@@ -31,6 +32,25 @@ test:
 # holds; never lower it to pass a PR.
 coverage:
 	$(VENV)/python3 -m pytest --cov=. --cov-report=term-missing -q
+
+# Day 119: `make test`/`make coverage` only ever ran pytest, but CI (see
+# .github/workflows/test.yml) has grown four more gates since (pip-audit on
+# Day 58, bandit on Day 118, shellcheck on Day 115, yamllint on Day 116) with
+# no local equivalent — a contributor running `make test` green locally could
+# still push a CI-only failure in any of the four. mypy is already covered
+# by the pytest suite itself (tests/test_*_types.py), so it's not repeated
+# here. shellcheck/yamllint are system packages, not pip ones — install them
+# separately (e.g. `apt-get install shellcheck yamllint`) if this fails with
+# "command not found". bandit excludes ./venv as well as ./tests: CI's
+# `bandit -r . -x ./tests` never sees a venv/ (GitHub Actions installs
+# dependencies without one), but this Makefile's own convention puts one at
+# the repo root, and without the exclude bandit scans every third-party
+# package inside it too.
+lint:
+	$(VENV)/python3 -m pip_audit -r requirements.txt
+	$(VENV)/python3 -m bandit -r . -x ./tests,./venv
+	shellcheck scripts/*.sh
+	yamllint .github/workflows/test.yml .github/dependabot.yml
 
 run:
 	$(VENV)/python3 main.py

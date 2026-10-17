@@ -33,7 +33,7 @@ An automated cryptocurrency trading bot for the Kraken exchange. Trades meme coi
 - **Structured trade log** — Every trade appended to both `trades.csv` and `trades.jsonl`, with a monthly archive script so neither grows forever
 - **Rotating log file + retry/backoff + rate limiting** — `bot.log` caps at 5MB × 5 backups; Kraken API calls retry on transient errors and stay under 1/sec
 - **One-command deploy** — `make deploy` tests, rsyncs, restarts the service, and verifies the heartbeat advanced before declaring success
-- **CI on every push** — pytest, a `pip-audit` dependency vulnerability scan, a `bandit` security static-analysis scan of the bot's own code, a `shellcheck` pass over `scripts/*.sh`, a `yamllint` pass over the CI workflow and Dependabot config, and Dependabot-proposed dependency updates
+- **CI on every push** — pytest, a `pip-audit` dependency vulnerability scan, a `bandit` security static-analysis scan of the bot's own code, a `shellcheck` pass over `scripts/*.sh`, a `yamllint` pass over the CI workflow and Dependabot config, and Dependabot-proposed dependency updates; `make lint` runs the four non-pytest gates locally before pushing
 - **Test coverage tracked** — `make coverage`; the whole codebase sits at 99%+, against a CI gate of 97% (raised 95% → 96% on Day 94, then → 97% on Day 112 once 99%+ had held stable for two-plus weeks)
 
 ## How It Works
@@ -224,7 +224,7 @@ kraken-bot/
 │   └── deploy.sh                # test → rsync → restart → verify heartbeat
 │
 ├── tests/                        # 59 test files / 504 tests, run with `make test` / `pytest`
-├── Makefile                      # help/test/coverage/run/dry/deploy/logs/restart/status
+├── Makefile                      # help/test/coverage/lint/run/dry/deploy/logs/restart/status
 ├── .coveragerc                   # Coverage scope — excludes tests/, venv/, site-packages
 ├── .github/workflows/test.yml    # CI: pytest + pip-audit + bandit + shellcheck + yamllint on every push
 ├── .github/dependabot.yml        # Weekly grouped dependency update PRs
