@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 # Day 57: one-command deploy.
 #
-# Runs the test suite, rsyncs the repo to the VPS (never clobbering .env),
-# restarts the systemd service, then polls the Day 21 heartbeat file
-# (last_run.txt) until it advances past its pre-deploy value. Fails loudly
-# and non-zero at whichever step breaks, instead of the old multi-command
-# ritual in OPS_RUNBOOK.md where a skipped step is easy to miss.
+# Runs the test suite and the Day 119 lint gates, rsyncs the repo to the VPS
+# (never clobbering .env), restarts the systemd service, then polls the Day
+# 21 heartbeat file (last_run.txt) until it advances past its pre-deploy
+# value. Fails loudly and non-zero at whichever step breaks, instead of the
+# old multi-command ritual in OPS_RUNBOOK.md where a skipped step is easy to
+# miss.
+#
+# Day 120: before Day 119 added `make lint` (pip-audit, bandit, shellcheck,
+# yamllint), this script only ran the test suite -- a push that was green on
+# `make test` but would have failed one of CI's other four gates could still
+# reach the VPS undetected. Deploy is the one path that reaches production
+# directly, so it gets the same gates CI enforces on every push to main.
 #
 # Usage: ./scripts/deploy.sh
 
@@ -21,6 +28,12 @@ cd "$ROOT"
 
 echo "==> Running test suite..."
 venv/bin/python3 -m pytest -q
+
+echo "==> Running lint gates (pip-audit, bandit, shellcheck, yamllint)..."
+venv/bin/python3 -m pip_audit -r requirements.txt
+venv/bin/python3 -m bandit -r . -x ./tests,./venv
+shellcheck scripts/*.sh
+yamllint .github/workflows/test.yml .github/dependabot.yml
 
 echo "==> Capturing pre-deploy heartbeat..."
 # shellcheck disable=SC2029 # REMOTE_DIR is this script's own constant, not

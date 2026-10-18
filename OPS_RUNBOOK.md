@@ -229,7 +229,7 @@ make deploy
 ./scripts/deploy.sh
 ```
 
-This runs the test suite, rsyncs the repo to the VPS (`.env`, `.git`, `venv`, and `__pycache__` excluded so the live secrets file is never clobbered), restarts `kraken-bot.service`, then polls the Day 21 heartbeat file (`last_run.txt`) for up to 3 minutes until it advances past its pre-deploy value. Fails loudly and exits non-zero at whichever step breaks — tests, rsync, restart, or a heartbeat that never advances (the strongest signal the restart actually broke something, not just that `systemctl restart` returned 0).
+This runs the test suite, then the Day 119 lint gates (`pip-audit`, `bandit`, `shellcheck`, `yamllint` — the same four CI checks `make lint` runs locally, Day 120), rsyncs the repo to the VPS (`.env`, `.git`, `venv`, and `__pycache__` excluded so the live secrets file is never clobbered), restarts `kraken-bot.service`, then polls the Day 21 heartbeat file (`last_run.txt`) for up to 3 minutes until it advances past its pre-deploy value. Fails loudly and exits non-zero at whichever step breaks — tests, lint, rsync, restart, or a heartbeat that never advances (the strongest signal the restart actually broke something, not just that `systemctl restart` returned 0).
 
 Healthy startup in the tailed logs looks like:
 ```
@@ -263,7 +263,8 @@ ssh root@204.168.204.221 'mv /root/kraken-bot/.env.bak /root/kraken-bot/.env'
 
 1. `DRY_RUN=true` locally for a full cycle and watched the logs.
 2. No uncommitted secrets in any file about to be synced.
-3. Confirm the service restarted with `systemctl status` showing `active (running)` (or trust `scripts/deploy.sh`'s heartbeat check, which verifies the same thing more precisely).
+3. `make lint` clean (or trust `scripts/deploy.sh`, which now runs the same gates before it ever touches the VPS — Day 120).
+4. Confirm the service restarted with `systemctl status` showing `active (running)` (or trust `scripts/deploy.sh`'s heartbeat check, which verifies the same thing more precisely).
 
 ---
 

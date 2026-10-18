@@ -221,7 +221,7 @@ kraken-bot/
 │   ├── archive_trades.py        # Rotates old trades.csv/trades.jsonl entries
 │   ├── check_heartbeat.py       # Telegram alert if the heartbeat goes stale (run off-VPS)
 │   ├── reconcile_positions.py   # Diffs positions.json against live Kraken holdings (run on-VPS)
-│   └── deploy.sh                # test → rsync → restart → verify heartbeat
+│   └── deploy.sh                # test → lint → rsync → restart → verify heartbeat
 │
 ├── tests/                        # 59 test files / 504 tests, run with `make test` / `pytest`
 ├── Makefile                      # help/test/coverage/lint/run/dry/deploy/logs/restart/status

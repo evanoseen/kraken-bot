@@ -111,7 +111,7 @@ This is a seed set. The Daily Iteration backlog (`DAILY_ITERATIONS.md`) will exp
 ### Deploy
 
 - [ ] ISC-31: `deploy/kraken-bot.service` matches the systemd unit running on the VPS
-- [x] ISC-32: `scripts/deploy.sh` runs tests, rsyncs the repo, restarts the service, and verifies the heartbeat advanced (Day 57 — rsync instead of the originally-conjectured scp, so `.env` on the server is never clobbered)
+- [x] ISC-32: `scripts/deploy.sh` runs tests and the Day 119 lint gates, rsyncs the repo, restarts the service, and verifies the heartbeat advanced (Day 57 — rsync instead of the originally-conjectured scp, so `.env` on the server is never clobbered; lint gates added Day 120)
 
 ### Extended (Days 18-83, seeded Day 85)
 
@@ -239,7 +239,7 @@ Re-verified Day 79 (2026-08-29) — 34 of 38 ISCs updated from unchecked to chec
 - ISC-29: `SECURITY.md`, 6 numbered sections plus a hardening backlog, re-audited Days 58 and 75
 - ISC-30: `.env.example`, kept in exact sync with the codebase by `tests/test_env_example.py` (Day 63)
 - ISC-31: not yet done — `deploy/kraken-bot.service` doesn't exist in the repo; blocked on VPS SSH access this environment doesn't have (tracked as Day 56)
-- ISC-32: `scripts/deploy.sh` — test, rsync, restart, poll the heartbeat until it advances or times out
+- ISC-32: `scripts/deploy.sh` — test, lint (Day 120), rsync, restart, poll the heartbeat until it advances or times out
 - ISC-33: `grep -r "git commit" scripts/` returns nothing; no cron/auto-commit script exists anywhere in the repo
 - ISC-34: `tests/test_env_example.py` and manual history review — no real secret-shaped value has ever been committed
 - ISC-35: `pump_detector.find_pumping_coins` only builds `pair_info` for `quote in ("ZCAD", "CAD")`; `kraken_client.get_tradable_coins` filters to CAD/USD pairs
