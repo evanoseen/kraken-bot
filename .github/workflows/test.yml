@@ -30,9 +30,11 @@ jobs:
           cache: pip
 
       - name: Install dependencies
+        # Day 122: requirements.txt is runtime-only; the pytest/mypy/
+        # pip-audit/bandit tooling CI needs lives in requirements-dev.txt.
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run pytest with coverage gate
         # Day 83: fails the build if overall coverage (scope per .coveragerc —
@@ -69,8 +71,11 @@ jobs:
         # still applies, so the flags were removed rather than left as dead
         # weight — see SECURITY.md section 5 for the full re-audit. Add a new
         # --ignore-vuln only for a real, currently-applicable advisory with no
-        # published fix (same procedure as before).
-        run: pip-audit -r requirements.txt
+        # published fix (same procedure as before). Day 122: scans both
+        # requirements files -- a CVE in a dev-only tool (pytest, mypy, ...)
+        # still runs in CI and in every contributor's venv, so it's still
+        # worth catching even though it never reaches the production VPS.
+        run: pip-audit -r requirements.txt -r requirements-dev.txt
 
       - name: Security static analysis (bandit)
         # Day 118: pip-audit (Day 58) catches known CVEs in dependencies, but
@@ -79,8 +84,9 @@ jobs:
         # excepts masking real failures -- the same kind of silent gap
         # shellcheck (Day 115) and yamllint (Day 116) closed for their file
         # types. bandit is a pure-Python tool already pinned in
-        # requirements.txt, so this adds no new non-Python toolchain (unlike
-        # the Ruby-based markdownlint considered and rejected on Day 117).
+        # requirements-dev.txt (Day 122), so this adds no new non-Python
+        # toolchain (unlike the Ruby-based markdownlint considered and
+        # rejected on Day 117).
         # tests/ is excluded since pytest's own `assert` usage throughout the
         # suite would otherwise trip B101 on code that was never a security
         # concern.

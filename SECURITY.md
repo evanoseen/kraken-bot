@@ -163,6 +163,7 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager | 
 
 ### Posture
 - Dependencies are pinned in `requirements.txt`. Upgrades happen deliberately, not via `pip install --upgrade`.
+- **Runtime deps are split from dev/CI tooling (Day 122).** `requirements.txt` holds only what `main.py` imports to run; pytest, mypy, pip-audit, and bandit live in `requirements-dev.txt`, installed in CI and local dev venvs but never on the production VPS (`OPS_RUNBOOK.md` section 4). Fewer packages running as root on the box holding live Kraken/Anthropic API keys means fewer compromised-package or typosquat vectors to worry about there — a test runner and a static analyzer have no business executing on production in the first place.
 - Before any dep upgrade: read the changelog, scan the diff for unusual additions (new network endpoints, new file writes, new subprocess calls).
 - **`pip-audit` runs in CI on every push and pull request** (Day 58, `.github/workflows/test.yml`) — a known CVE in any pinned dependency fails the build instead of waiting for a monthly manual run to catch it.
 - Treat ANY new transitive dependency as a code review surface.
@@ -170,7 +171,7 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager | 
 ### Remediation when the CI scan fails
 1. Read the `pip-audit` output — it names the vulnerable package, the installed version, the CVE/GHSA ID, and the first fixed version.
 2. **Verify the fix version actually exists** with `pip index versions <package>` before assuming it's a one-line bump — on Day 58 (2026-08-04), all 8 findings in this repo's dependency tree named a fix version that isn't published on PyPI (confirmed with a freshly-upgraded pip against the real index, not a caching artifact), meaning there was nothing to upgrade to.
-3. If a real fix version exists: bump that one dependency in `requirements.txt` to it. Don't bump unrelated deps in the same commit. Run `pip install -r requirements.txt && pytest -v && pip-audit -r requirements.txt` locally to confirm the fix and that nothing else broke. Commit with a message naming the CVE (`git commit -m "Bump requests to 2.32.6 (PYSEC-2026-2275)"`) so the fix is searchable in history.
+3. If a real fix version exists: bump that one dependency in `requirements.txt` to it. Don't bump unrelated deps in the same commit. Run `pip install -r requirements.txt -r requirements-dev.txt && pytest -v && pip-audit -r requirements.txt -r requirements-dev.txt` locally to confirm the fix and that nothing else broke. Commit with a message naming the CVE (`git commit -m "Bump requests to 2.32.6 (PYSEC-2026-2275)"`) so the fix is searchable in history.
 4. If no fixed version exists yet: check whether the vulnerable code path is even reachable by this bot (e.g., a vuln in an HTTP server component of a library only used as a client). Add `--ignore-vuln <ID>` to the CI step (`.github/workflows/test.yml`) with a one-line comment reason, and log it in the table below. Re-check `pip index versions` for that package at the next audit — once a fix ships, remove the ignore and bump.
 5. Never widen an ignore to a whole package or a version range — one `--ignore-vuln <ID>` per advisory, so a *different* future CVE in the same package still fails the build.
 
@@ -198,7 +199,7 @@ pip index versions <package>
 #    convention above if you're also crossing a major/minor boundary)
 
 # 3. Reinstall and verify
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 make test
 
 # 4. Commit with the package and version in the message
@@ -215,26 +216,32 @@ If `make test` fails after a bump, that's the changelog-reading step this policy
 
 ### Concrete actions
 ```bash
-# 1. Install pip-audit if not already
-pip install pip-audit
+# 1. Install dev tooling (pip-audit lives here, Day 122 — never on the VPS)
+pip install -r requirements-dev.txt
 
-# 2. Audit current requirements
-pip-audit -r requirements.txt
+# 2. Audit current requirements (both files — a CVE in a dev-only tool still
+#    runs in CI and in every contributor's venv)
+pip-audit -r requirements.txt -r requirements-dev.txt
 # expected: "No known vulnerabilities found" or a list of CVEs with fix versions.
 
 # 3. Inspect installed package names before installing
-pip install --dry-run -r requirements.txt
+pip install --dry-run -r requirements.txt -r requirements-dev.txt
 # Read the resolver output. Reject any package whose name does not match what you expect.
 
 # 4. Upgrade workflow (single dep at a time) — see "Upper-bound pins" above for the full procedure
-pip-audit -r requirements.txt          # baseline
-# edit requirements.txt to bump one version
-pip install -r requirements.txt
+pip-audit -r requirements.txt -r requirements-dev.txt   # baseline
+# edit requirements.txt (or requirements-dev.txt) to bump one version
+pip install -r requirements.txt -r requirements-dev.txt
 make test                               # full suite must stay green
-git diff requirements.txt               # commit the diff
+git diff requirements.txt requirements-dev.txt          # commit the diff
 
-# 5. Cron a monthly audit on the VPS (or run before every deploy)
-ssh root@204.168.204.221 'cd /root/kraken-bot && /root/kraken-bot/venv/bin/pip-audit -r requirements.txt'
+# 5. Cron a monthly audit of what the VPS actually has installed (or run
+#    before every deploy). Day 122: pip-audit itself is never installed on
+#    the VPS (it's a requirements-dev.txt tool), so pull the VPS venv's
+#    frozen package list over SSH and audit it from a dev machine instead
+#    of installing audit tooling onto the production box.
+ssh root@204.168.204.221 '/root/kraken-bot/venv/bin/pip freeze' > /tmp/vps-freeze.txt
+pip-audit -r /tmp/vps-freeze.txt
 ```
 
 ---

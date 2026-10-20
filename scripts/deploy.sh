@@ -14,6 +14,12 @@
 # reach the VPS undetected. Deploy is the one path that reaches production
 # directly, so it gets the same gates CI enforces on every push to main.
 #
+# Day 122: this script's own venv (the deploying machine's, not the VPS's)
+# needs both requirements.txt and requirements-dev.txt installed to run the
+# pytest/pip-audit/bandit steps below -- the VPS itself only ever gets
+# requirements.txt (see OPS_RUNBOOK.md section 4), since none of this
+# script's own tooling runs there.
+#
 # Usage: ./scripts/deploy.sh
 
 set -euo pipefail
@@ -30,7 +36,7 @@ echo "==> Running test suite..."
 venv/bin/python3 -m pytest -q
 
 echo "==> Running lint gates (pip-audit, bandit, shellcheck, yamllint)..."
-venv/bin/python3 -m pip_audit -r requirements.txt
+venv/bin/python3 -m pip_audit -r requirements.txt -r requirements-dev.txt
 venv/bin/python3 -m bandit -r . -x ./tests,./venv
 shellcheck scripts/*.sh
 yamllint .github/workflows/test.yml .github/dependabot.yml

@@ -109,8 +109,10 @@ git clone https://github.com/YOUR_USERNAME/kraken-bot.git
 cd kraken-bot
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 ```
+
+`requirements.txt` is runtime-only (what `main.py` actually imports); `requirements-dev.txt` adds the pytest/mypy/pip-audit/bandit tooling `make test`/`make lint` need locally and in CI. Install both for local development — only the production VPS install (below) skips the dev file.
 
 ### Configure
 
@@ -141,6 +143,8 @@ cd /root/kraken-bot
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Deliberately `requirements.txt` only, not `requirements-dev.txt` — the VPS runs `main.py` and nothing else; it has no reason to carry a pytest runner, a static analyzer, or a vulnerability scanner it never executes (Day 122).
 
 Create `/etc/systemd/system/kraken-bot.service`:
 
@@ -228,7 +232,8 @@ kraken-bot/
 ├── .coveragerc                   # Coverage scope — excludes tests/, venv/, site-packages
 ├── .github/workflows/test.yml    # CI: pytest + pip-audit + bandit + shellcheck + yamllint on every push
 ├── .github/dependabot.yml        # Weekly grouped dependency update PRs
-└── requirements.txt
+├── requirements.txt               # Runtime deps only — what ships to the VPS
+└── requirements-dev.txt           # pytest/mypy/pip-audit/bandit — dev + CI only (Day 122)
 ```
 
 Docs: [STRATEGY.md](STRATEGY.md) (signal + sizing detail), [OPS_RUNBOOK.md](OPS_RUNBOOK.md) (deploy/incident response), [SECURITY.md](SECURITY.md) (threat model), [ISA.md](ISA.md) (project spec).
@@ -255,9 +260,9 @@ This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to 
 - tenacity — retry/backoff on Kraken API calls
 - requests — Telegram + Kraken connectivity check
 - python-dotenv — `.env` loading
-- pytest / pytest-mock / pytest-cov — 59 test files (504 tests), run in CI on every push
-- pip-audit — dependency vulnerability scanning in CI
-- bandit — security static analysis of the bot's own code (`*.py`, `scripts/*.py`) in CI
+- pytest / pytest-mock / pytest-cov — 59 test files (504 tests), run in CI on every push (pinned in `requirements-dev.txt`, Day 122 — never installed on the VPS)
+- pip-audit — dependency vulnerability scanning in CI (`requirements-dev.txt`)
+- bandit — security static analysis of the bot's own code (`*.py`, `scripts/*.py`) in CI (`requirements-dev.txt`)
 - shellcheck — static analysis for `scripts/*.sh` in CI
 - yamllint — static analysis for `.github/workflows/test.yml` and `.github/dependabot.yml` in CI
 - Dependabot — weekly grouped dependency update PRs

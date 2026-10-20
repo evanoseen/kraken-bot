@@ -47,7 +47,7 @@ coverage:
 # the repo root, and without the exclude bandit scans every third-party
 # package inside it too.
 lint:
-	$(VENV)/python3 -m pip_audit -r requirements.txt
+	$(VENV)/python3 -m pip_audit -r requirements.txt -r requirements-dev.txt
 	$(VENV)/python3 -m bandit -r . -x ./tests,./venv
 	shellcheck scripts/*.sh
 	yamllint .github/workflows/test.yml .github/dependabot.yml

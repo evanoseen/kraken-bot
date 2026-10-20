@@ -1,14 +1,18 @@
+# Runtime dependencies only — this is exactly what the bot imports to run
+# main.py, and exactly what the production VPS install (see OPS_RUNBOOK.md
+# section 4, README.md's "Deploy to VPS") pulls in. Day 122: test/lint/
+# security tooling (pytest, mypy, pip-audit, bandit, ...) used to live here
+# too, which meant every fresh VPS install (and every "pip install -r
+# requirements.txt" ever run on the box holding real Kraken/Anthropic API
+# keys) also pulled in a pytest runner, a static analyzer, and a vuln
+# scanner it never executes — unnecessary code on a box this project's own
+# SECURITY.md threat model says to minimize. Those tools now live in
+# requirements-dev.txt; local dev / CI installs both files, the VPS
+# installs only this one.
 krakenex>=2.2.2,<3.0.0
 anthropic>=1.12.1,<2.0.0
 feedparser>=6.0.14,<7.0.0
 python-dotenv>=1.2.4,<2.0.0
 schedule>=1.2.2,<2.0.0
 requests>=2.34.2,<3.0.0
-pytest>=9.0.0,<10.0.0
-pytest-mock>=3.16.0,<4.0.0
-pytest-cov>=7.1.0,<8.0.0
-mypy>=2.4.0,<3.0.0
 tenacity>=9.2.1,<10.0.0
-pip-audit>=2.10.1,<3.0.0
-bandit>=1.9.4,<2.0.0
-types-requests>=2.33.0.20260906,<3.0.0

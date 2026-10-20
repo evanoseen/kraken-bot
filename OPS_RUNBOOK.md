@@ -438,7 +438,9 @@ A quick map so you do not have to remember.
 ├── listing_monitor.py      # Kraken blog listing watch
 ├── positions.py            # position state (positions.json)
 ├── config.py               # .env loader
-├── requirements.txt        # pip deps
+├── requirements.txt        # pip deps — the only one actually installed here (Day 122)
+├── requirements-dev.txt    # pytest/mypy/pip-audit/bandit pins — rsynced here like any other
+│                           #   tracked file, but nothing on the VPS ever installs from it
 ├── venv/                   # virtualenv
 ├── .env                    # secrets and tunables — DO NOT COMMIT
 ├── positions.json          # open positions (auto-managed)
