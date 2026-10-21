@@ -221,13 +221,14 @@ kraken-bot/
 │
 ├── scripts/
 │   ├── daily.sh                 # Prints today's DAILY_ITERATIONS.md task
+│   ├── next_day.py              # Finds the next undone DAILY_ITERATIONS.md day (Day 123)
 │   ├── daily_pnl.py             # Per-day PnL report, --since/--until range
 │   ├── archive_trades.py        # Rotates old trades.csv/trades.jsonl entries
 │   ├── check_heartbeat.py       # Telegram alert if the heartbeat goes stale (run off-VPS)
 │   ├── reconcile_positions.py   # Diffs positions.json against live Kraken holdings (run on-VPS)
 │   └── deploy.sh                # test → lint → rsync → restart → verify heartbeat
 │
-├── tests/                        # 59 test files / 504 tests, run with `make test` / `pytest`
+├── tests/                        # 60 test files / 514 tests, run with `make test` / `pytest`
 ├── Makefile                      # help/test/coverage/lint/run/dry/deploy/logs/restart/status
 ├── .coveragerc                   # Coverage scope — excludes tests/, venv/, site-packages
 ├── .github/workflows/test.yml    # CI: pytest + pip-audit + bandit + shellcheck + yamllint on every push
@@ -260,7 +261,7 @@ This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to 
 - tenacity — retry/backoff on Kraken API calls
 - requests — Telegram + Kraken connectivity check
 - python-dotenv — `.env` loading
-- pytest / pytest-mock / pytest-cov — 59 test files (504 tests), run in CI on every push (pinned in `requirements-dev.txt`, Day 122 — never installed on the VPS)
+- pytest / pytest-mock / pytest-cov — 60 test files (514 tests), run in CI on every push (pinned in `requirements-dev.txt`, Day 122 — never installed on the VPS)
 - pip-audit — dependency vulnerability scanning in CI (`requirements-dev.txt`)
 - bandit — security static analysis of the bot's own code (`*.py`, `scripts/*.py`) in CI (`requirements-dev.txt`)
 - shellcheck — static analysis for `scripts/*.sh` in CI
