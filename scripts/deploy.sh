@@ -20,7 +20,32 @@
 # requirements.txt (see OPS_RUNBOOK.md section 4), since none of this
 # script's own tooling runs there.
 #
+# Day 124: this script takes no arguments, but previously had no way of
+# saying so -- `set -euo pipefail` only catches command failures, not bad
+# invocations, so any stray argument (a typo'd flag, `--help`) was silently
+# ignored and the script fell straight through to the full
+# test-then-lint-then-rsync-then-restart sequence with zero feedback. Since
+# this is the one script that reaches the live VPS directly, any unexpected
+# argument now exits before the test suite, lint gates, or anything
+# VPS-facing ever run.
+#
 # Usage: ./scripts/deploy.sh
+
+usage() {
+  echo "Usage: ./scripts/deploy.sh"
+  echo "Runs the test suite and lint gates, then deploys to the live VPS."
+  echo "Takes no arguments."
+}
+
+if [[ $# -gt 0 ]]; then
+  if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  echo "error: unexpected argument: $1" >&2
+  usage >&2
+  exit 1
+fi
 
 set -euo pipefail
 

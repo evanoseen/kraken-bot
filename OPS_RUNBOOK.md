@@ -231,6 +231,8 @@ make deploy
 
 This runs the test suite, then the Day 119 lint gates (`pip-audit`, `bandit`, `shellcheck`, `yamllint` — the same four CI checks `make lint` runs locally, Day 120), rsyncs the repo to the VPS (`.env`, `.git`, `venv`, and `__pycache__` excluded so the live secrets file is never clobbered), restarts `kraken-bot.service`, then polls the Day 21 heartbeat file (`last_run.txt`) for up to 3 minutes until it advances past its pre-deploy value. Fails loudly and exits non-zero at whichever step breaks — tests, lint, rsync, restart, or a heartbeat that never advances (the strongest signal the restart actually broke something, not just that `systemctl restart` returned 0).
 
+The script takes no arguments (Day 124): `-h`/`--help` prints usage and exits 0, and any other argument is rejected with a usage message and exit 1 — both before the test suite, lint gates, or anything VPS-facing ever runs. A bare `./scripts/deploy.sh` is the only invocation that deploys.
+
 Healthy startup in the tailed logs looks like:
 ```
 "Kraken Meme Coin NewsTrader starting..."
