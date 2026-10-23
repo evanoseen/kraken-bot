@@ -13,6 +13,15 @@ before writing this lock test — same "fix before locking, not locking
 around the gap" approach Day 92 took with `portfolio.py::compute_value`.
 The other three scripts were already mypy-clean and fully annotated.
 
+Day 125: `scripts/next_day.py` (added Day 123) was mypy-clean and fully
+annotated from the start, but — like `market_matcher.py` on Day 90 and the
+16 modules on Day 91 before it got a matching lock test on Day 92 — nobody
+added it here the day it landed. This would have been the sixth time this
+exact "mypy clean but unpinned" gap went unnoticed; added here instead,
+and tests/test_readme_mypy_file_count.py now locks the whole TARGETS/TARGET
+set across every tests/test_*_types.py file against the real file set so
+a seventh time fails CI instead of waiting for a future sweep to notice.
+
 Mirrors tests/test_remaining_modules_types.py in shape.
 """
 from __future__ import annotations
@@ -27,12 +36,13 @@ TARGETS = [
     REPO_ROOT / "scripts" / "archive_trades.py",
     REPO_ROOT / "scripts" / "check_heartbeat.py",
     REPO_ROOT / "scripts" / "daily_pnl.py",
+    REPO_ROOT / "scripts" / "next_day.py",
     REPO_ROOT / "scripts" / "reconcile_positions.py",
 ]
 
 
 def test_mypy_clean_on_scripts():
-    """Done-when probe verbatim: one mypy invocation across all 4 files, 0 errors."""
+    """Done-when probe verbatim: one mypy invocation across all 5 files, 0 errors."""
     cmd = [sys.executable, "-m", "mypy", "--ignore-missing-imports", *[str(t) for t in TARGETS]]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
     assert result.returncode == 0, (
@@ -57,7 +67,7 @@ def _missing_annotations(path: Path) -> list[str]:
 
 
 def test_every_function_has_full_type_hints():
-    """AST audit across all 4 files: every arg and every return is annotated."""
+    """AST audit across all 5 files: every arg and every return is annotated."""
     missing: list[str] = []
     for target in TARGETS:
         missing.extend(_missing_annotations(target))
