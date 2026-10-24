@@ -152,7 +152,7 @@ The original 38 ISCs described the project as it stood at Day 2. Day 79's re-aud
 | ISC-16 | file | `trades.jsonl` parses as JSONL | each line valid | `python3 json.loads` |
 | ISC-17 | log | every Kraken API method emits a latency log | observed | `journalctl \| grep "kraken\\..*took"` |
 | ISC-18 | bash | `python3 scripts/daily_pnl.py` exits 0 and prints a table | exit 0 | Bash |
-| ISC-19 | file | `latest_status.json` has 5 fields after a cycle | 5 keys | `python3 + json` |
+| ISC-19 | file | `status.json` has 10 fields after a cycle | 10 keys | `python3 + json` |
 | ISC-20..22 | bash | pytest collects and passes; GH Actions green | exit 0 | `pytest ; gh run list` |
 | ISC-23..24 | bash | `mypy` clean on the named file | 0 errors | `mypy` |
 | ISC-25 | bash | every function has a docstring | 100% | `ast.parse` |
