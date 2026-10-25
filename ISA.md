@@ -230,7 +230,7 @@ Re-verified Day 79 (2026-08-29) — 34 of 38 ISCs updated from unchecked to chec
 - ISC-18: `python3 scripts/daily_pnl.py` exits 0 and prints a table; `--since`/`--until` added Day 60
 - ISC-19: `status.write_status()`, called from `trader.run_trading_cycle` after every cycle; writes `status.json` (path from `STATUS_FILE`, default changed from the ISA's original `latest_status.json` — see Decisions)
 - ISC-20: `pytest --collect-only` exits 0 (434+ tests as of Day 78)
-- ISC-21: every root module has direct or near-direct test coverage — `make coverage` shows every file ≥91% except `kraken_client.py` (75%) and `trader.py` (82%), both queued as follow-up work
+- ISC-21: every root module has direct or near-direct test coverage, enforced by the ISC-43 CI gate (`make coverage` fails the build on any overall regression below its current 97% floor); the two modules this ISC originally flagged below that bar (`kraken_client.py` at 75%, `trader.py` at 82%, both since closed to 100% — see `tests/test_kraken_client.py` and `tests/test_trader_coverage_gaps.py`, and `JOURNAL.md`'s Day 80/92 entries) would now trip that gate immediately if either regressed again
 - ISC-22: `.github/workflows/test.yml` runs pytest + `pip-audit` on every push; README badge confirmed resolving Day 64
 - ISC-23: `tests/test_kraken_client_types.py` pins `mypy --ignore-missing-imports kraken_client.py` at 0 errors
 - ISC-24: `tests/test_trader_types.py` pins the same for `trader.py`
