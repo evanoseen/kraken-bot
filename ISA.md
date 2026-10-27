@@ -86,7 +86,7 @@ This is a seed set. The Daily Iteration backlog (`DAILY_ITERATIONS.md`) will exp
 - [x] ISC-16: All trade events append one JSON object per trade to `trades.jsonl` (Day 20)
 - [x] ISC-17: Every Kraken API method logs its latency (Day 22)
 - [x] ISC-18: `scripts/daily_pnl.py` aggregates `trades.jsonl` into a daily PnL summary (Day 23, gained `--since`/`--until` Day 60)
-- [x] ISC-19: A JSON status file is written each cycle with run timestamp, balance, holdings, last decision, errors (Day 45; shipped as `status.json`, not the originally-named `latest_status.json` — see Decisions)
+- [x] ISC-19: A JSON status file is written each cycle (Day 45; shipped as `status.json`, not the originally-named `latest_status.json` — see Decisions). Field names and count are `status.write_status()`'s real payload — tracked by the Verification table's ISC-19 row below and locked against drift by `tests/test_status.py::test_isa_status_json_schema_claim_matches_reality` — not restated here, since the original wording ("run timestamp, balance, holdings, last decision, errors") named three keys (`holdings`, `last decision`, `errors`) that `write_status()` has never written
 
 ### Quality
 
