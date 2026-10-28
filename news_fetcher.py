@@ -15,6 +15,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Day 130: this used to also carry 7 hardcoded single-account Nitter URLs
+# (elonmusk, CoinbaseAssets, binance, kraken, cz_binance, VitalikButerin,
+# realDonaldTrump) appended below the 6 real feeds. `fetch_top_headlines`
+# only ever read `RSS_FEEDS[:6]`, so those 7 entries were never fetched by
+# anything — the same accounts are already covered, with proper 3-instance
+# failover, by `TWITTER_ACCOUNTS`/`fetch_twitter_signals` below. Removed the
+# dead entries and the slice; this list is consumed in full now.
 RSS_FEEDS = [
     "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
     "https://cointelegraph.com/rss",
@@ -22,14 +29,6 @@ RSS_FEEDS = [
     "https://coindesk.com/arc/outboundfeeds/rss/",
     "https://news.google.com/rss/search?q=dogecoin+OR+shiba+inu+OR+pepe+coin+OR+meme+coin&hl=en-US&gl=US&ceid=US:en",
     "https://news.google.com/rss/search?q=elon+musk+crypto+OR+elon+musk+doge&hl=en-US&gl=US&ceid=US:en",
-    # Crypto-specific Twitter/X account RSS via nitter (free, no API key)
-    "https://nitter.poast.org/elonmusk/rss",
-    "https://nitter.poast.org/CoinbaseAssets/rss",
-    "https://nitter.poast.org/binance/rss",
-    "https://nitter.poast.org/kraken/rss",
-    "https://nitter.poast.org/cz_binance/rss",
-    "https://nitter.poast.org/VitalikButerin/rss",
-    "https://nitter.poast.org/realDonaldTrump/rss",
 ]
 
 # Backup nitter instances if primary is down
@@ -144,7 +143,7 @@ def fetch_top_headlines(max_articles: int = 60) -> list:
     seen = set()
 
     # RSS news feeds
-    for rss_url in RSS_FEEDS[:6]:  # original 6 news feeds only
+    for rss_url in RSS_FEEDS:
         try:
             feed = feedparser.parse(rss_url)
             for entry in feed.entries[:10]:

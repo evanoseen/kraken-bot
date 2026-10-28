@@ -54,7 +54,7 @@ def test_happy_path_returns_shaped_articles(patched_news_fetcher):
     """A normal RSS response is converted into dicts with title/summary/source."""
     nf, mock_parse = patched_news_fetcher
 
-    # Same feed returned for every RSS_FEEDS[:6] call; dedup means we still
+    # Same feed returned for every RSS_FEEDS call; dedup means we still
     # only get the unique entries below.
     mock_parse.return_value = _fake_feed([
         {"title": "Elon Musk tweets DOGE to the moon", "summary": "summary one"},
@@ -96,8 +96,8 @@ def test_dedupes_by_title_across_feeds(patched_news_fetcher):
     nf, mock_parse = patched_news_fetcher
 
     # Every RSS feed returns the same single-entry list. The function calls
-    # feedparser.parse six times (RSS_FEEDS[:6]); without dedup we'd see 6
-    # copies. With dedup-by-title we should see 1.
+    # feedparser.parse once per RSS_FEEDS entry (six, currently); without
+    # dedup we'd see 6 copies. With dedup-by-title we should see 1.
     mock_parse.return_value = _fake_feed([
         {"title": "Same headline everywhere", "summary": "syndicated"},
     ])
@@ -119,6 +119,23 @@ def test_max_articles_cap_is_respected(patched_news_fetcher):
     articles = nf.fetch_top_headlines(max_articles=5)
 
     assert len(articles) == 5
+
+
+def test_every_rss_feed_entry_is_actually_fetched(patched_news_fetcher):
+    """`fetch_top_headlines` must request every URL in `RSS_FEEDS`, not a
+    stale prefix of it.
+
+    Day 130 regression: `RSS_FEEDS` used to carry 7 appended Nitter URLs
+    that a hardcoded `RSS_FEEDS[:6]` slice silently never fetched. This
+    pins the loop to the live list itself so a future append can't go
+    unread the same way again without this test catching it.
+    """
+    nf, mock_parse = patched_news_fetcher
+
+    nf.fetch_top_headlines(max_articles=60)
+
+    requested_urls = [call.args[0] for call in mock_parse.call_args_list]
+    assert requested_urls == nf.RSS_FEEDS
 
 
 def test_format_headlines_for_prompt_uses_emoji_prefixes():
