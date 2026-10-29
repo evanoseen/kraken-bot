@@ -10,9 +10,13 @@ assumed); the tests pin the actual behavior.
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────
@@ -284,3 +288,50 @@ def test_all_accounts_all_instances_down_returns_empty(mocker):
     articles = nf.fetch_twitter_signals()
 
     assert articles == []
+
+
+# ─── Day 131: "~50 high-signal accounts" ceiling claim vs. real TWITTER_ACCOUNTS ──
+#
+# STRATEGY.md ("Up to ~50 high-signal accounts on X via Nitter RSS") and
+# news_fetcher.py's own module docstring ("~50 high-signal X accounts") both
+# state an approximate *ceiling*, not an exact count — TWITTER_ACCOUNTS
+# currently holds 41 entries (Day 130's own finding while fixing the
+# unrelated RSS_FEEDS dead-code bug). Unlike README's test-count claims
+# (tests/test_readme_test_count.py) or ISA.md's ISC-19 field count
+# (tests/test_status.py), "~N" is a stated ceiling, so the lock here is an
+# inequality, not an equality: a future account addition that pushes the
+# real count past what the docs promise should fail loudly instead of
+# sitting unnoticed the way the Day 130 RSS_FEEDS entries did.
+
+CEILING_PATTERN = re.compile(r"~(\d+) high-signal")
+
+
+def _claimed_account_ceilings() -> list[int]:
+    """Every "~N high-signal" ceiling claim across STRATEGY.md and
+    news_fetcher.py's own module docstring."""
+    import news_fetcher as nf
+
+    strategy_text = (REPO_ROOT / "STRATEGY.md").read_text()
+    docstring_text = Path(nf.__file__).read_text()
+    return [int(n) for n in CEILING_PATTERN.findall(strategy_text + docstring_text)]
+
+
+def test_twitter_accounts_count_does_not_exceed_claimed_ceiling():
+    """The real `TWITTER_ACCOUNTS` list must never grow past the "~N
+    high-signal accounts" ceiling STRATEGY.md and news_fetcher.py's
+    docstring both state."""
+    import news_fetcher as nf
+
+    ceilings = _claimed_account_ceilings()
+    assert ceilings, (
+        "Expected at least one '~N high-signal' ceiling claim in "
+        "STRATEGY.md and news_fetcher.py's module docstring"
+    )
+
+    real_count = len(nf.TWITTER_ACCOUNTS)
+    exceeded = [c for c in ceilings if real_count > c]
+    assert not exceeded, (
+        f"TWITTER_ACCOUNTS has grown to {real_count} entries, exceeding the "
+        f"claimed ceiling(s) {exceeded} in STRATEGY.md/news_fetcher.py's "
+        f"docstring — update the doc wording (or trim the list) to match."
+    )
