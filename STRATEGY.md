@@ -33,14 +33,14 @@ The bot does not try to predict markets from price data alone. It listens for ca
 **What it watches.** Every CAD-quoted Kraken pair (full `Ticker` and `AssetPairs` snapshot per cycle).
 
 **What it measures.** Volume spike ratio (`volume_today / (volume_24h / 24)`) and price move off the 24-hour low. A pair qualifies when:
-- Average daily USD volume is **below $5,000,000** (`pump_detector.py:65`) — the bot deliberately hunts unknown coins, not already-discovered ones
-- Volume spike ratio ≥ `min_volume_multiplier` (default `3.0` in `trader.py:125`, fallback `2.0` in the function default)
+- Average daily USD volume is **below $5,000,000** (`pump_detector.py:77`) — the bot deliberately hunts unknown coins, not already-discovered ones
+- Volume spike ratio ≥ `min_volume_multiplier` (default `3.0` in `trader.py:392`, fallback `2.0` in the function default)
 - Price is up `>1.0%` off the 24h low
 - The coin is not in `IGNORE_COINS` — majors, stablecoins, known memes, and Ontario-geo-blocked tokens are excluded
 
 **What it emits.** Up to `top_n=5` candidates sorted by spike size, each with `coin, pair, price, volume_spike, price_change_24h, daily_volume_usd, trades_today`.
 
-**Confidence math (in `trader.py:130`).**
+**Confidence math (in `trader.py:397`).**
 ```
 confidence = min(0.65 + (volume_spike / 50), 0.95)
 ```
@@ -57,7 +57,7 @@ A 5x spike maps to 0.75 confidence. A 25x spike maps to 0.95 (the ceiling). The 
 - Up to ~50 high-signal accounts on X via Nitter RSS, including market movers (Elon Musk, Trump, Saylor, Kiyosaki), exchange announcement accounts (CoinbaseAssets, Binance, Kraken), exchange CEOs (CZ, Brian Armstrong, Jesse Powell), protocol founders (Vitalik, Justin Sun, Charlie Lee), top callers (APompliano, CryptoCobain, CryptoWendyO, others), and threat-intel handles (PeckShieldAlert, zachxbt)
 - Three Nitter instances with automatic failover (`nitter.poast.org`, `nitter.privacydev.net`, `nitter.1d4.us`)
 
-**What it measures.** The fetched titles are concatenated and sent to Claude (`claude-opus-4-6` per `market_matcher.py:41`) with the full list of Kraken-tradable coins. Claude is prompted to find headlines that will cause "significant short-term price moves" and return a JSON array of `{coin, action, confidence, reasoning}` objects.
+**What it measures.** The fetched titles are concatenated and sent to Claude (`claude-opus-4-6` per `market_matcher.py:50`) with the full list of Kraken-tradable coins. Claude is prompted to find headlines that will cause "significant short-term price moves" and return a JSON array of `{coin, action, confidence, reasoning}` objects.
 
 **What it emits.** Only items where `confidence >= MIN_CONFIDENCE` (default `0.80`) survive the local filter.
 
@@ -101,7 +101,7 @@ flowchart TD
 
 **2. Balance and daily-loss gate.** Balance is fetched once. On the first cycle of a session, `_starting_balance` is captured. If `_starting_balance - current_balance >= DAILY_LOSS_LIMIT` (default `100 CAD`), the cycle exits immediately. If balance is under `$5`, the cycle skips.
 
-**3. Holdings and exit checks.** For each held coin, `check_exit_conditions` (in `trader.py:15`) compares current price against the recorded entry price. Two thresholds apply:
+**3. Holdings and exit checks.** For each held coin, `check_exit_conditions` (in `trader.py:50`) compares current price against the recorded entry price. Two thresholds apply:
 - **Stop loss** at `pct_change <= -STOP_LOSS_PCT` (default `-10%`). Triggers a market sell of the full position, logs the realized PnL, removes the position.
 - **Take profit** at `pct_change >= TAKE_PROFIT_PCT` (default `+25%`). Same mechanics on the upside.
 Exits log structured PnL even in dry-run mode.
@@ -115,7 +115,7 @@ Exits log structured PnL even in dry-run mode.
 **7. Signal merge and reversal check.** Pump and news signals are concatenated and deduplicated. Before the per-signal loop runs, `check_signal_reversal_exits` (Day 93) exits any currently held coin whose merged signal batch this cycle carries a fresh `action: "sell"` — see "Signal-driven exit on a stale buy thesis" below.
 
 **8. Placement.** For each remaining signal:
-- Sells on coins not currently held are skipped (`trader.py:159`).
+- Sells on coins not currently held are skipped (`trader.py:453`).
 - Price is fetched per coin; coins without a price quote are skipped.
 - Position size is `min(size_position(confidence), balance * 0.25)` — see "Position sizing and confidence math" below for `size_position`. The 25% balance cap is tighter than the listing buy's 30% — listing signals are trusted more.
 - In dry-run mode, the trade is logged only. Otherwise `place_order` is called, and on success, `record_buy` or `log_trade` (sell branch) persists the position state.
