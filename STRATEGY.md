@@ -161,7 +161,7 @@ The `balance * 0.25` cap in the table above still applies on top of `size_positi
 
 ## Exit logic
 
-A position closes on a fixed threshold (stop-loss, take-profit, trailing stop, or max age, all in `check_exit_conditions`), on a fresh signal reversal (`check_signal_reversal_exits`, Day 93), or on an LLM sell signal reaching the generic signal-processing loop for a coin already held. There's no manual sell-on-counter-signal beyond that, and the news layer cannot emit a sell on a coin already held that gets cleared purely on its own merits.
+A position closes on a fixed threshold (stop-loss, take-profit, trailing stop, or max age, all in `check_exit_conditions`), on a fresh signal reversal (`check_signal_reversal_exits`, Day 93), or on an LLM sell signal reaching the generic signal-processing loop for a coin already held. There's no manual sell-on-counter-signal beyond that, and the news layer cannot emit a sell on a coin already held that gets cleared purely on its own merits. A separate guard, minimum hold time (below), can suppress the three price-threshold checks entirely for a still-young position.
 
 | Trigger | Condition | Action |
 |---------|-----------|--------|
@@ -169,6 +169,7 @@ A position closes on a fixed threshold (stop-loss, take-profit, trailing stop, o
 | Stop loss | `(price - entry_price) / entry_price <= -STOP_LOSS_PCT` (default `-10%`) | Market sell full position, log `sell_stoploss`, remove position |
 | Take profit | `(price - entry_price) / entry_price >= TAKE_PROFIT_PCT` (default `+25%`) | Market sell full position, log `sell_takeprofit`, remove position |
 | Max age (Day 31) | Position held ≥ `MAX_POSITION_AGE_HOURS` (default `24h`), checked before all of the above | Market sell full position, log `sell_stale`, remove position |
+| Minimum hold time (Day 44, opt-in) | Position age < `MIN_HOLD_MINUTES` (default `0`, disabled), checked right after max age and before trailing stop/stop-loss/take-profit | Not an exit itself — skips the three price-threshold rows above entirely for this cycle; the position stays open |
 | Signal reversal (Day 93) | This cycle's merged pump+news signal batch carries an `action: "sell"` for a coin already held | Market sell full position, log `sell_signalreversal`, remove position |
 | News-driven sell | LLM emits `action: "sell"` for a held coin, reaching the generic signal loop unclaimed by the row above | Market sell, log `sell_signal`, remove position |
 
@@ -185,6 +186,14 @@ Before Day 93, a held position's original catalyst was never re-checked — only
 This still depends on the news layer choosing to re-surface the same coin with an opposing signal in a given cycle — Claude is not re-asked "is my existing thesis on coin X still valid" directly, since that would mean querying it once per held position every cycle. See "Cost/latency" note below for why that tradeoff was made deliberately rather than by omission.
 
 **Cost/latency tradeoff.** A held position's original catalyst is only re-evaluated when the same cycle's broad headline scan happens to surface a reversal for that specific coin — not via a dedicated per-position re-query. Querying Claude once per open position every `RUN_INTERVAL_MINUTES` would multiply LLM cost and latency by `len(holdings)` for a bot capped at `MAX_OPEN_POSITIONS` (small, but non-zero) positions, for a signal that in practice is highly correlated with the same broad scan already run for new entries. If this proves too slow to catch reversals in practice, the next step is a targeted per-holding re-query, not a broader scan.
+
+### Minimum hold time guard (Day 44)
+
+`MIN_HOLD_MINUTES` is `0` by default — disabled, every position is immediately eligible for its price-threshold exits from the moment it's bought, same as before Day 44. Set above `0` and `trader.check_exit_conditions` skips straight to the next held coin, before trailing stop, stop-loss, or take-profit are evaluated, whenever `(now - entry_timestamp)` is still under the floor:
+
+- **Runs right after the stale-position (max-age) check, before all three price thresholds.** A position young enough to be skipped still gets its stale-position check first — `MIN_HOLD_MINUTES` only ever gates trailing-stop/stop-loss/take-profit, never max-age.
+- **Does not gate signal reversal or the news-driven sell either.** Both of those live outside `check_exit_conditions` entirely (`check_signal_reversal_exits` runs earlier in the cycle; the news-driven sell reaches the generic signal loop), so a reversed thesis or an explicit LLM sell can still close a brand-new position — only the three *price*-threshold exits wait out the floor.
+- **Exists to stop a position from round-tripping on noise seconds after entry.** A coin bought on a confident signal can wobble below its stop-loss band within the same cycle purely on bid/ask spread or a stale quote; a short floor (minutes, not hours) absorbs that without disabling stop-loss/take-profit for the position's whole life the way a much larger `MAX_POSITION_AGE_HOURS` would.
 
 ### Trailing stop vs. fixed stop-loss/take-profit (Day 69)
 
