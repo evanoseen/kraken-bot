@@ -157,7 +157,7 @@ The original 38 ISCs described the project as it stood at Day 2. Day 79's re-aud
 | ISC-23..24 | bash | `mypy` clean on the named file | 0 errors | `mypy` |
 | ISC-25 | bash | every function has a docstring | 100% | `ast.parse` |
 | ISC-26..27 | code | decorators / rate limiter present and unit-tested | tests pass | `pytest` |
-| ISC-28 | code | drawdown breaker unit test fires liquidation on 16% sim drawdown | test pass | `pytest` |
+| ISC-28 | code | drawdown breaker unit test fires liquidation on 21% sim drawdown | test pass | `pytest` |
 | ISC-29..30 | file | `SECURITY.md` and `.env.example` exist with required content | yes | `Read + grep` |
 | ISC-31 | diff | `deploy/kraken-bot.service` matches what is on the VPS | identical | `ssh cat + diff` |
 | ISC-32 | bash | `./scripts/deploy.sh` end to end exits 0 on no-op change | exit 0 | Bash |

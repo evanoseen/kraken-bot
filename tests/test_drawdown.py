@@ -2,9 +2,19 @@
 from __future__ import annotations
 
 import itertools
+import logging
 import os
+import re
+from pathlib import Path
 import pytest
 import trader
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+ISA = REPO_ROOT / "ISA.md"
+
+ISC_28_ROW_PATTERN = re.compile(
+    r"ISC-28 \| code \| drawdown breaker unit test fires liquidation on (\d+)% sim drawdown"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -93,3 +103,27 @@ def test_circuit_breaker_does_not_fire_below_threshold(patched, mocker):
     analyze = mocker.patch("trader.analyze_news_for_trades", return_value=[])
     trader.run_trading_cycle()
     analyze.assert_called_once()
+
+
+def test_isa_sim_drawdown_claim_matches_reality(patched, caplog):
+    """Day 134: ISA.md's ISC-28 Test Strategy row claims a specific
+    sim-drawdown percentage fires the circuit breaker. Simulate exactly
+    that percentage drop from peak and confirm it really does -- this
+    used to claim 16%, a leftover from the ISA's original pre-ship 15%
+    MAX_DRAWDOWN_PCT conjecture (see ISA.md's own Decisions entry) that
+    was never reconciled after the real shipped default became 0.20
+    (20%); 16% sits below that real threshold and would never have
+    fired the breaker at all."""
+    match = ISC_28_ROW_PATTERN.search(ISA.read_text())
+    assert match, "Expected an ISC-28 drawdown row in ISA.md's Test Strategy table"
+    claimed_pct = int(match.group(1))
+
+    patched.return_value = 100.0
+    trader.run_trading_cycle()
+    patched.return_value = 100.0 * (1 - claimed_pct / 100)
+    with caplog.at_level(logging.WARNING, logger="trader"):
+        trader.run_trading_cycle()
+    assert "circuit breaker" in caplog.text.lower(), (
+        f"ISA.md's ISC-28 row claims a {claimed_pct}% sim drawdown fires the "
+        "circuit breaker, but simulating exactly that drop did not trigger it"
+    )
