@@ -4,7 +4,7 @@
 # for local development and CI (`pip install -r requirements.txt -r
 # requirements-dev.txt`), but never on the production VPS, which only
 # needs requirements.txt to run main.py.
-pytest>=9.0.0,<10.0.0
+pytest>=9.2.0,<10.0.0
 pytest-mock>=3.17.0,<4.0.0
 pytest-cov>=7.1.0,<8.0.0
 mypy>=2.4.0,<3.0.0
