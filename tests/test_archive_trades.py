@@ -47,6 +47,30 @@ def cutoff():
     return NOW - timedelta(days=90)
 
 
+class _FrozenDateTime(datetime):
+    """A `datetime` subclass whose `now()` always returns the fixture `NOW`.
+
+    `archive_trades.main()` computes its own cutoff via
+    `datetime.now(timezone.utc)` (real wall-clock time) rather than taking a
+    cutoff argument the way `archive_csv`/`archive_jsonl` do. Every other
+    test in this file calls those two functions directly with the `cutoff`
+    fixture above, so they're hermetic. The two tests that go through
+    `main()` instead compared a `RECENT` fixture (1 day before `NOW`) against
+    the real clock with no patching — true when this test was written
+    (2026-08-05-ish), but silently false by 2026-11-02 once real elapsed time
+    pushed `RECENT` more than `--days 90` behind the actual wall clock,
+    exactly the kind of test-rots-with-the-calendar bug `ISA.md`'s Decisions
+    section already warns `MIN_HOLD_MINUTES`-style numeric claims about.
+    Patching `archive_trades.datetime` to this frozen subclass for those two
+    tests makes `main()`'s cutoff math use the same fixed `NOW` the fixtures
+    were built from, independent of whatever day this suite actually runs.
+    """
+
+    @classmethod
+    def now(cls, tz=None):
+        return NOW.astimezone(tz) if tz is not None else NOW.replace(tzinfo=None)
+
+
 # ─── Day 100: _parse_timestamp direct tests ────────────────────────────────
 #
 # Every test above builds fixtures with an aware (tzinfo=timezone.utc)
@@ -210,7 +234,8 @@ def test_archive_jsonl_dry_run_writes_nothing(tmp_path, cutoff):
     assert not archive.exists()
 
 
-def test_main_end_to_end_splits_both_files(tmp_path, capsys):
+def test_main_end_to_end_splits_both_files(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(archive_trades, "datetime", _FrozenDateTime)
     csv_path = _write_csv(tmp_path / "trades.csv", [
         [OLD, "DOGE", "buy_signal", "0.1", "10.00", ""],
         [RECENT, "SHIB", "sell_takeprofit", "0.00001", "12.00", "2.00"],
