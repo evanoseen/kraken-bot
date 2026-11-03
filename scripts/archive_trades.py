@@ -121,7 +121,15 @@ def archive_jsonl(path: Path, cutoff: datetime, archive_path: Path, dry_run: boo
     return len(archived_lines), len(kept_lines)
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: Optional[list[str]] = None, now: Optional[datetime] = None) -> int:
+    """Run the CLI. `now` has no CLI flag of its own -- it exists so tests
+    can pin the cutoff computation to a fixed instant instead of the real
+    wall clock, the same `now: Optional[datetime] = None` pattern
+    `check_heartbeat.check`/`staleness_minutes` already use. Day 136: this
+    replaces Day 135's `monkeypatch.setattr(archive_trades, "datetime", ...)`
+    fix for the one test that goes through this function, which worked but
+    patched the module's `datetime` name globally for the whole test rather
+    than overriding just the one value this function actually needs."""
     parser = argparse.ArgumentParser(description="Archive trade log entries older than N days.")
     parser.add_argument("--days", type=int, default=DEFAULT_DAYS,
                          help=f"Archive entries older than this many days (default {DEFAULT_DAYS}).")
@@ -130,7 +138,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="Report counts only, write nothing.")
     args = parser.parse_args(argv)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=args.days)
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=args.days)
     cutoff_label = cutoff.strftime("%Y%m%d")
 
     csv_archive = args.csv.parent / f"trades_archive_{cutoff_label}.csv"
