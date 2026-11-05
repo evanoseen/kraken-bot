@@ -265,6 +265,30 @@ def test_sell_not_held_is_skipped(cycle_setup, caplog):
     trader.place_order.assert_not_called()
 
 
+def test_unresolvable_coin_signal_is_skipped(cycle_setup, mocker, caplog):
+    """A signal for a coin Claude invented or hallucinated never reaches place_order.
+
+    market_matcher.py doesn't validate `coin` against `available_coins` itself
+    (see tests/test_market_matcher.py::test_unknown_coin_handled_gracefully) —
+    it explicitly defers that to "the trader layer", which is supposed to skip
+    anything get_price() can't resolve (kraken_client.get_price returns 0.0 for
+    an unknown pair, per tests/test_kraken_client.py). This is the missing link:
+    no prior test exercised that defense end to end through run_trading_cycle's
+    actual signal loop, only check_exit_conditions' own price-missing skip
+    (test_price_missing_skips_position above) and the two underlying units in
+    isolation.
+    """
+    mocker.patch("trader.analyze_news_for_trades", return_value=[
+        {"coin": "FAKECOIN", "action": "buy", "confidence": 0.95, "reasoning": "hallucinated"},
+    ])
+    mocker.patch("trader.get_price", return_value=0.0)
+    with caplog.at_level(logging.WARNING, logger="trader"):
+        trader.run_trading_cycle()
+    assert "Could not get price for FAKECOIN" in caplog.text
+    trader.place_order.assert_not_called()
+    trader.record_buy.assert_not_called()
+
+
 def test_cooldown_active_skip(cycle_setup, mocker, caplog):
     mocker.patch("trader.analyze_news_for_trades", return_value=[
         {"coin": "DOGE", "action": "buy", "confidence": 0.9, "reasoning": "test"},

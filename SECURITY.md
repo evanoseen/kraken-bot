@@ -311,6 +311,26 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager'  
 
 ---
 
+## 7. Untrusted content reaching the Claude signal pipeline
+
+### Threat
+- `market_matcher.py` interpolates fetched RSS headlines (and, per `STRATEGY.md`, tracked X/Twitter accounts) directly into the prompt sent to Claude, unescaped. Anyone who can get text into one of those feeds — a compromised RSS source, a crafted post from a tracked account — controls part of that prompt. A prompt-injection attempt could try to get Claude to return a bogus high-confidence signal regardless of what the real news says.
+- Separately, whether by injection or ordinary hallucination, Claude can return a `"coin"` value that isn't a real Kraken-tradable symbol. `analyze_news_for_trades` does not check `coin` against the `available_coins` list it was given — by design, per `tests/test_market_matcher.py::test_unknown_coin_handled_gracefully`, which pins "no exception" as the contract and documents that validation is deferred to the trader layer.
+
+### Posture
+- Nothing sanitizes the prompt input itself — this bot has no LLM output-validation layer distinct from the risk gates every signal (pump, listing, and news) already passes through in `trader.py`'s main loop, regardless of source:
+  - `MIN_CONFIDENCE` floor (news signals; pump signals use their own formula floored at 0.65) — a low-effort injection asking for a merely plausible signal still needs to clear this bar.
+  - Price resolution is the hard backstop for a bogus or hallucinated `coin`: `get_price()` resolves it against Kraken's real asset-pair list and returns `0.0` for anything that isn't a real tradable pair (`kraken_client.py`, tested directly in `tests/test_kraken_client.py` against `"TOTALLYFAKECOIN"`); `trader.py`'s signal loop then skips the signal outright (`"Could not get price for {coin}"`) rather than ever reaching `place_order`. Locked end-to-end by `tests/test_trader_coverage_gaps.py::test_unresolvable_coin_signal_is_skipped` (Day 138), which runs a hallucinated-coin signal through the real `run_trading_cycle()` path, not just the two underlying units in isolation.
+  - `blacklist.py`, the per-coin trade cap, the cooldown window, and `MAX_OPEN_POSITIONS` all still apply to a Claude-sourced signal exactly as they do to any other.
+  - Even a signal that clears every gate above is bounded by `MAX_TRADE_AMOUNT`/confidence-scaled sizing, `DAILY_LOSS_LIMIT`, and `MAX_DRAWDOWN_PCT` — the same per-trade and daily-loss caps this document's opening paragraph already names as the blast-radius bound for a compromise, which apply here regardless of *why* a signal fired.
+- What's genuinely unmitigated: a successful injection naming a **real, already-tradable** coin with a plausible-sounding reason can still trigger one capped, confidence-gated trade on it, same as a real but wrong headline-driven signal would. There's no cross-check of a headline's claim against an independent source before trading on it — mitigating that would mean verifying news claims out-of-band, not just bounding the trade's size, and nothing like that exists today.
+
+### Concrete actions
+- No VPS-side action needed; this is a code-level posture, not an operational one. If a specific feed source is ever found to be the origin of a bad signal, add it to the blacklist review in `STRATEGY.md`'s source list rather than trying to filter prompt content after the fact.
+- When adding any new signal source (another RSS feed, a new tracked account, a new API), route it through the same `trader.py` signal loop rather than a separate order path, so it inherits every gate above for free.
+
+---
+
 ## Hardening backlog
 
 Everything originally listed here has shipped: retry/rate-limiter (Days 18-19), the `KILL` switch (Day 24), drawdown circuit breaker (Day 27), JSONL trade log (Day 20), status file (Day 45), trade notifications (Day 26, extended by shutdown alerts Day 52, stale-heartbeat alerts Day 61, and reconciliation-mismatch alerts Day 74). See `DAILY_ITERATIONS.md` and `JOURNAL.md` for the day-by-day record. One item remains open:
