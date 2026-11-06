@@ -215,6 +215,26 @@ ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/reconc
 ```
 Install with `ssh root@204.168.204.221 'crontab -e'`. A mismatch alert doesn't necessarily mean something is wrong — a manual trade made outside the bot is expected to show up this way — but it's the earliest possible signal that `positions.json` and reality have diverged, whatever the cause.
 
+### Daily PnL report (Day 23/60)
+
+`scripts/daily_pnl.py` answers "how has the bot actually done?" without grepping `trades.jsonl` by hand: it aggregates trade events by calendar day (buy/sell counts, net CAD cash flow, realized PnL) and, unless skipped, fetches the live Kraken balance — the same lazy-import, fail-soft pattern `reconcile_positions.py` uses, so a network hiccup degrades to a missing balance line instead of crashing the report.
+
+```bash
+# Full report: every day on record, plus the live Kraken balance
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/daily_pnl.py'
+
+# Skip the Kraken balance fetch (e.g. offline, or just the trade history)
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/daily_pnl.py --no-balance'
+
+# One week only (Day 60), inclusive on both ends
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/daily_pnl.py --since 2026-07-25 --until 2026-07-31'
+
+# Everything from a given day onward
+ssh root@204.168.204.221 'cd /root/kraken-bot && venv/bin/python3 scripts/daily_pnl.py --since 2026-07-25'
+```
+
+Reads `trades.jsonl` (Day 20's structured log, not the legacy `trades.csv`) — `--file` points it at a different path if needed. Read-only and safe to run anytime: no state written, no Kraken calls beyond the one skippable balance fetch.
+
 ---
 
 ## 4. Deploy procedure
