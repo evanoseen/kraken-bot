@@ -51,7 +51,7 @@ Full stage-by-stage detail, confidence math, and the exact sizing formula live i
 
 ## Architecture
 
-Three independent signal sources feed a single decision loop. The trader merges them, applies risk caps and exit logic, and routes orders through one Kraken REST client. Full strategy details live in [STRATEGY.md](STRATEGY.md).
+Three independent signal sources feed a single decision loop. The trader merges them, applies risk caps and exit logic, and routes orders through one Kraken REST client. Full strategy details live in [STRATEGY.md](STRATEGY.md). A second, independent path runs alongside that loop: `health.py` checks Kraken connectivity before the first cycle ever runs, `heartbeat.py` records liveness every cycle after, and the off-VPS `scripts/check_heartbeat.py` cron polls that liveness file and fires its own Telegram alert on staleness — a separate process from `notifier.py`'s trade/shutdown path, by design, so a wedged or crashed bot can still be alerted on from outside it.
 
 ```mermaid
 flowchart LR
@@ -69,19 +69,25 @@ flowchart LR
         PD["pump_detector.py"]
     end
 
+    HEALTH["health.py<br/>startup checks"]
     KILL["KILL file<br/>kill switch"]
     TRADER["trader.py<br/>cycle orchestrator<br/>+ risk gates + sizing"]
+    HB["heartbeat.py<br/>per-cycle liveness write"]
     POS[("positions.json<br/>trades.csv / trades.jsonl<br/>status.json / last_run.txt")]
     KC["kraken_client.py"]
     KEX["Kraken Exchange<br/>REST API"]
     NOTIFY["notifier.py"]
     TG["Telegram"]
+    CHECKHB["check_heartbeat.py<br/>independent off-VPS cron"]
 
     RSS --> NF
     NF --> MM
     MM <--> CLAUDE
     BLOG --> LM
     TICK --> PD
+
+    HEALTH -.checks before first cycle.-> KEX
+    HEALTH -.gates.-> TRADER
 
     MM --> TRADER
     LM --> TRADER
@@ -92,7 +98,12 @@ flowchart LR
     KC --> KEX
     TRADER <--> POS
     TRADER --> NOTIFY
+    TRADER --> HB
+    HB --> POS
     NOTIFY --> TG
+
+    POS -.polled by.-> CHECKHB
+    CHECKHB -.stale alert, independent of NOTIFY.-> TG
 ```
 
 ## Setup
@@ -228,7 +239,7 @@ kraken-bot/
 │   ├── reconcile_positions.py   # Diffs positions.json against live Kraken holdings (run on-VPS)
 │   └── deploy.sh                # test → lint → rsync → restart → verify heartbeat
 │
-├── tests/                        # 65 test files / 530 tests, run with `make test` / `pytest`
+├── tests/                        # 66 test files / 532 tests, run with `make test` / `pytest`
 ├── Makefile                      # help/test/coverage/lint/run/dry/deploy/logs/restart/status
 ├── .coveragerc                   # Coverage scope — excludes tests/, venv/, site-packages
 ├── .github/workflows/test.yml    # CI: pytest + pip-audit + bandit + shellcheck + yamllint on every push
@@ -261,7 +272,7 @@ This bot trades real money. Crypto is extremely volatile. Use `DRY_RUN=true` to 
 - tenacity — retry/backoff on Kraken API calls
 - requests — Telegram + Kraken connectivity check
 - python-dotenv — `.env` loading
-- pytest / pytest-mock / pytest-cov — 65 test files (530 tests), run in CI on every push (pinned in `requirements-dev.txt`, Day 122 — never installed on the VPS)
+- pytest / pytest-mock / pytest-cov — 66 test files (532 tests), run in CI on every push (pinned in `requirements-dev.txt`, Day 122 — never installed on the VPS)
 - pip-audit — dependency vulnerability scanning in CI (`requirements-dev.txt`)
 - bandit — security static analysis of the bot's own code (`*.py`, `scripts/*.py`) in CI (`requirements-dev.txt`)
 - shellcheck — static analysis for `scripts/*.sh` in CI
