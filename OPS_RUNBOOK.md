@@ -465,6 +465,8 @@ A quick map so you do not have to remember.
 │                           #   tracked file, but nothing on the VPS ever installs from it
 ├── venv/                   # virtualenv
 ├── .env                    # secrets and tunables — DO NOT COMMIT
+├── KILL                    # kill-switch trigger (Day 24, section 6) — absent unless
+│                           #   active; git-ignored like .env, never ships in a deploy
 ├── positions.json          # open positions (auto-managed)
 ├── seen_listings.json      # listing IDs already actioned
 ├── trades.csv              # trade history (append-only)
