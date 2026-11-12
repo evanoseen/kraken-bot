@@ -290,6 +290,39 @@ def test_all_accounts_all_instances_down_returns_empty(mocker):
     assert articles == []
 
 
+# ─── Day 145: nitter "R to @user: text" title-cleanup branch ──────────────
+#
+# fetch_twitter_signals's own comment says it cleans up nitter's retweet
+# title format ("R to @user: text" -> just "text") by splitting on the
+# first ": ". Every fixture title in every test above this one is a plain
+# sentence with no ": " in it, so that branch (`if ": " in title:`) had
+# never actually been exercised — coverage flagged it as the sole missed
+# line in the file (98%, not 100%).
+
+
+def test_retweet_title_colon_prefix_is_stripped(mocker):
+    """A nitter retweet title ("R to @user: actual text") has the
+    "R to @user:" prefix stripped by the `": " in title` branch, leaving
+    just the real tweet text."""
+    import news_fetcher as nf
+    mocker.patch.object(nf, "TWITTER_ACCOUNTS", ["testuser"])
+
+    def fake_parse(url):
+        if "nitter.poast.org" in url:
+            return _fake_feed([
+                {"title": "R to @elonmusk: Dogecoin is going to the moon soon", "summary": ""}
+            ])
+        raise AssertionError(f"should not reach second instance: {url}")
+
+    mocker.patch("news_fetcher.feedparser.parse", side_effect=fake_parse)
+
+    articles = nf.fetch_twitter_signals()
+
+    assert len(articles) == 1
+    assert "Dogecoin is going to the moon soon" in articles[0]["title"]
+    assert "R to @elonmusk" not in articles[0]["title"]
+
+
 # ─── Day 131: "~50 high-signal accounts" ceiling claim vs. real TWITTER_ACCOUNTS ──
 #
 # STRATEGY.md ("Up to ~50 high-signal accounts on X via Nitter RSS") and
