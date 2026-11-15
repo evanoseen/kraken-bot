@@ -521,6 +521,8 @@ Always run this trio after a deploy, rollback, env edit, or restart:
 ssh root@204.168.204.221 << 'EOF'
 echo "=== service ==="
 systemctl is-active kraken-bot
+echo "=== status snapshot ==="
+cat /root/kraken-bot/status.json 2>/dev/null || echo "(no status file yet)"
 echo "=== last 30 log lines ==="
 journalctl -u kraken-bot -n 30 --no-pager
 echo "=== positions ==="
@@ -530,7 +532,7 @@ tail -n 5 /root/kraken-bot/trades.csv 2>/dev/null || echo "(no trades file yet)"
 EOF
 ```
 
-Healthy output: `active`, recent "Starting trading cycle" or "Trading cycle complete" lines, no unhandled exceptions in the tail.
+Healthy output: `active`, recent "Starting trading cycle" or "Trading cycle complete" lines, no unhandled exceptions in the tail. `status.json`'s `updated_at` should be no older than one `RUN_INTERVAL_MINUTES` cycle, and `balance_cad`/`session_pnl_cad`/`win_rate` give the fastest read on "did this change work" without parsing logs by hand (Day 45's whole point, per section 7's map).
 
 ## 10. Maintenance cadence
 
