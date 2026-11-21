@@ -70,11 +70,20 @@ def test_makefile_lint_target_matches_reality():
 
 
 def test_deploy_sh_lint_gates_match_reality():
+    # Day 154: Day 153's own version of this test anchored on the whole
+    # "Running lint gates" block, echo line included — the echo line
+    # ("...pip-audit, bandit, shellcheck, yamllint...") duplicates all four
+    # names, so deleting the *real* invocation of any one of them still left
+    # the echo's mention behind and the test kept passing. Anchoring on just
+    # the invocation lines that follow the echo (excluding it) means a
+    # removed real command is actually caught, not just a removed mention.
     gates = _real_non_pytest_gates()
     text = DEPLOY_SH.read_text()
-    match = re.search(r"Running lint gates.*?\n\n", text, re.DOTALL)
-    assert match, "Expected a 'Running lint gates' block in scripts/deploy.sh"
-    _assert_text_names_every_gate("scripts/deploy.sh's lint-gates block", match.group(0), gates)
+    echo_match = re.search(r'echo "==> Running lint gates[^"]*"\n', text)
+    assert echo_match, "Expected a 'Running lint gates' echo line in scripts/deploy.sh"
+    next_blank = text.index("\n\n", echo_match.end())
+    commands_block = text[echo_match.end():next_blank]
+    _assert_text_names_every_gate("scripts/deploy.sh's lint-gate invocation lines", commands_block, gates)
 
 
 def test_readme_ci_bullet_matches_reality():
