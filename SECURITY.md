@@ -157,7 +157,7 @@ ssh root@204.168.204.221 'journalctl -u ssh --since "24 hours ago" --no-pager | 
 ## 5. Dependency vulnerability policy
 
 ### Threat
-- A compromised PyPI package (krakenex, anthropic, feedparser, schedule, python-dotenv, requests) executes arbitrary code under root on the VPS.
+- A compromised PyPI package (krakenex, anthropic, feedparser, schedule, python-dotenv, requests, tenacity) executes arbitrary code under root on the VPS.
 - A typosquatted name (`kraken-ex`, `anthopic`) is installed instead of the real package.
 - Stale deps accumulate known CVEs.
 
