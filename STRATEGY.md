@@ -114,10 +114,15 @@ Exits log structured PnL even in dry-run mode.
 
 **7. Signal merge and reversal check.** Pump and news signals are concatenated and deduplicated. Before the per-signal loop runs, `check_signal_reversal_exits` (Day 93) exits any currently held coin whose merged signal batch this cycle carries a fresh `action: "sell"` — see "Signal-driven exit on a stale buy thesis" below.
 
-**8. Placement.** For each remaining signal:
+**8. Placement.** For each remaining signal, in order:
 - Sells on coins not currently held are skipped (`trader.py:453`).
+- Blacklisted coins are skipped outright, buy or sell (Day 39) — `COIN_BLACKLIST` in `.env`, a comma-separated, case-insensitive ticker list; empty or unset allows everything.
+- Coins that already hit their per-coin trade cap this session are skipped (Day 41) — `MAX_TRADES_PER_COIN`, unset by default (unlimited).
+- Coins still inside their post-trade cooldown window are skipped — `TRADE_COOLDOWN_MINUTES` (default `60`), tracked in-process per coin and reset whenever the bot restarts.
+- Buys (not sells) are skipped once the bot already holds `MAX_OPEN_POSITIONS` (default `3`) coins.
 - Price is fetched per coin; coins without a price quote are skipped.
 - Position size is `min(size_position(confidence), balance * 0.25)` — see "Position sizing and confidence math" below for `size_position`. The 25% balance cap is tighter than the listing buy's 30% — listing signals are trusted more.
+- Orders that size below `MIN_TRADE_AMOUNT` are skipped (Day 46) — the exchange rejects dust-sized orders, so a confidence/balance combination too small to clear the floor doesn't fire a doomed trade.
 - In dry-run mode, the trade is logged only. Otherwise `place_order` is called, and on success, `record_buy` or `log_trade` (sell branch) persists the position state.
 
 ---
